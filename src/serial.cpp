@@ -1,5 +1,6 @@
 #include "serial.hpp"
 #include "utils.hpp"
+#include <nanoprintf.h>
 
 namespace cosmos::serial {
     constexpr uint16_t COM1 = 0x3F8;
@@ -60,5 +61,16 @@ namespace cosmos::serial {
             wait_for_transmit();
             utils::byte_out(COM1, ch);
         }
+    }
+
+    void printf(const char* fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+
+        static char buffer[256];
+        npf_vsnprintf(buffer, 256, fmt, args);
+        print(buffer);
+
+        va_end(args);
     }
 } // namespace cosmos::serial

@@ -6,18 +6,18 @@ project(
     ]
 )
 
-cpp_args = []
-
 executable(
     'cosmos-os',
     [
         'src/utils.cpp',
         'src/limine.cpp',
+        'src/nanoprintf.cpp',
         'src/serial.cpp',
         'src/main.cpp'
     ],
     include_directories: include_directories(
-        'vendor/limine'
+        'vendor/limine',
+        'vendor/nanoprintf'
     ),
     cpp_args: [
         '-std=c++23',

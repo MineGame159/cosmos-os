@@ -2,3 +2,6 @@
 	path = vendor/limine
 	url = https://github.com/limine-bootloader/limine.git
 	branch = v10.x-binary
+[submodule "vendor/nanoprintf"]
+	path = vendor/nanoprintf
+	url = https://github.com/charlesnicholson/nanoprintf.git

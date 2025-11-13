@@ -48,5 +48,7 @@ namespace cosmos::limine {
         return true;
     }
 
-    const Framebuffer& get_framebuffer() { return fb; }
+    const Framebuffer& get_framebuffer() {
+        return fb;
+    }
 } // namespace cosmos::limine

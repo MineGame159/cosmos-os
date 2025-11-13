@@ -11,7 +11,7 @@ extern "C" [[noreturn]] void main() {
         utils::halt();
     }
 
-    serial::print("[cosmos] Initialized\n");
+    serial::printf("[cosmos] %s\n", "Initialized");
 
     const auto pixels = static_cast<uint32_t*>(limine::get_framebuffer().pixels);
     pixels[0] = 0xFFFFFFFF;
