@@ -1,3 +1,4 @@
+#include "interrupts/isr.hpp"
 #include "limine.hpp"
 #include "serial.hpp"
 #include "utils.hpp"
@@ -10,6 +11,8 @@ extern "C" [[noreturn]] void main() {
     if (!limine::init()) {
         utils::halt();
     }
+
+    isr::init();
 
     serial::printf("[cosmos] %s\n", "Initialized");
 

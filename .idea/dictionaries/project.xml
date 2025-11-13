@@ -2,6 +2,7 @@
   <dictionary name="project">
     <words>
       <w>limine</w>
+      <w>memcpy</w>
       <w>xorriso</w>
     </words>
   </dictionary>

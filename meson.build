@@ -1,6 +1,6 @@
 project(
     'cosmos-os',
-    [ 'cpp' ],
+    [ 'cpp', 'nasm' ],
     default_options: [
         'cpp_std=c++17'
     ]
@@ -13,9 +13,13 @@ executable(
         'src/limine.cpp',
         'src/nanoprintf.cpp',
         'src/serial.cpp',
+        'src/interrupts/pic.cpp',
+        'src/interrupts/isr.asm',
+        'src/interrupts/isr.cpp',
         'src/main.cpp'
     ],
     include_directories: include_directories(
+        'src',
         'vendor/limine',
         'vendor/nanoprintf'
     ),

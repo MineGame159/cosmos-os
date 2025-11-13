@@ -6,6 +6,9 @@ namespace cosmos::utils {
     [[noreturn]]
     void halt();
 
+    void memset(void* dst, uint8_t value, uint64_t size);
+    void memcpy(void* dst, void* src, uint64_t size);
+
     // Byte
 
     inline uint8_t byte_in(uint16_t port) {
