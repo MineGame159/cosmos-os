@@ -13,4 +13,4 @@ namespace cosmos::limine {
     bool init();
 
     const Framebuffer& get_framebuffer();
-}
+} // namespace cosmos::limine

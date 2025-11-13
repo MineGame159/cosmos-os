@@ -1,18 +1,17 @@
 #include "limine.hpp"
+#include "serial.hpp"
+#include "utils.hpp"
 
 using namespace cosmos;
 
-[[noreturn]]
-void halt() {
-    for (;;) {
-        asm volatile ("hlt");
-    }
-}
-
 extern "C" [[noreturn]] void main() {
+    serial::init();
+
     if (!limine::init()) {
-        halt();
+        utils::halt();
     }
+
+    serial::print("[cosmos] Initialized\n");
 
     const auto pixels = static_cast<uint32_t*>(limine::get_framebuffer().pixels);
     pixels[0] = 0xFFFFFFFF;
@@ -20,5 +19,5 @@ extern "C" [[noreturn]] void main() {
     pixels[2] = 0xFF00FF00;
     pixels[3] = 0xFF0000FF;
 
-    halt();
+    utils::halt();
 }

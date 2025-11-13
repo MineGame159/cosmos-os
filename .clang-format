@@ -6,3 +6,7 @@ ColumnLimit: 140
 MaxEmptyLinesToKeep: 2
 NamespaceIndentation: All
 PointerAlignment: Left
+SortIncludes: true
+BreakAfterAttributes: Leave
+Cpp11BracedListStyle: false
+AllowShortFunctionsOnASingleLine: Empty

@@ -11,7 +11,9 @@ cpp_args = []
 executable(
     'cosmos-os',
     [
+        'src/utils.cpp',
         'src/limine.cpp',
+        'src/serial.cpp',
         'src/main.cpp'
     ],
     include_directories: include_directories(
