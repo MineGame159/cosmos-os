@@ -1,6 +1,6 @@
 project(
     'cosmos-os',
-    [ 'cpp', 'nasm' ],
+    [ 'cpp' ],
     default_options: [
         'cpp_std=c++17'
     ]
@@ -14,7 +14,6 @@ executable(
         'src/nanoprintf.cpp',
         'src/serial.cpp',
         'src/interrupts/pic.cpp',
-        'src/interrupts/isr.asm',
         'src/interrupts/isr.cpp',
         'src/main.cpp'
     ],
@@ -32,6 +31,7 @@ executable(
         '-mno-mmx', '-mno-3dnow', '-mno-avx', '-mno-avx2', '-mno-avx512f',
         '-fno-stack-protector', '-fno-stack-check',
         '-fno-exceptions', '-fno-rtti',
+        '-fno-asynchronous-unwind-tables',
         '-pedantic', '-Wall', '-Wextra', '-Wundef', '-Werror', '-Wno-unused-variable', '-Wno-unused-parameter', '-Wno-unused-function', '-Wno-unused-but-set-variable', '-Wno-missing-field-initializers'
     ],
     pie: false,
