@@ -19,7 +19,7 @@ jobs:
     - name: Install packages
       uses: awalsh128/cache-apt-pkgs-action@v1.6.0
       with:
-        packages: meson nasm xorriso
+        packages: meson xorriso
         version: 1.0
 
     - name: Setup Meson
