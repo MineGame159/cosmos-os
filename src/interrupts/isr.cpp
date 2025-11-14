@@ -6,7 +6,7 @@
 
 namespace cosmos::isr {
     extern "C" {
-    // Exceptions
+    // Exceptions 0..31
     void isr0();
     void isr1();
     void isr2();
@@ -40,7 +40,7 @@ namespace cosmos::isr {
     void isr30();
     void isr31();
 
-    // Interrupt requests
+    // IRQs 32..47
     void isr32();
     void isr33();
     void isr34();
@@ -59,14 +59,148 @@ namespace cosmos::isr {
     void isr47();
     }
 
+    /// Handlers for IRQs 0..15
     static handler_fn handlers[16];
 
+    /// Naked common ISR routine. RSP points to saved r15 (top of saved registers).
+    extern "C" __attribute__((naked)) void isr_common() {
+        asm volatile(R"(
+        # Preserve base pointer and set new frame
+        push %rbp
+        mov %rsp, %rbp
+
+        # Save general-purpose registers (caller-saved + callee-saved)
+        push %rax
+        push %rbx
+        push %rcx
+        push %rdx
+        push %rsi
+        push %rdi
+        push %r8
+        push %r9
+        push %r10
+        push %r11
+        push %r12
+        push %r13
+        push %r14
+        push %r15
+
+        # At this point stack layout (top -> lower):
+        # r15, r14, ..., rax, rbp, <interrupt number>, <error code>, <iret frame...>
+
+        # Pass pointer to the top of this saved-register block as first argument (RDI)
+        mov %rsp, %rdi
+
+        # Call C++ handler: void isr_handler(InterruptInfo* info)
+        call isr_handler
+
+        # Restore registers in reverse order
+        pop %r15
+        pop %r14
+        pop %r13
+        pop %r12
+        pop %r11
+        pop %r10
+        pop %r9
+        pop %r8
+        pop %rdi
+        pop %rsi
+        pop %rdx
+        pop %rcx
+        pop %rbx
+        pop %rax
+
+        # Restore base pointer
+        pop %rbp
+
+        # Remove the two 8-byte values pushed by stubs: interrupt + error
+        add $16, %rsp
+
+        # Return from interrupt (pops RIP, CS, RFLAGS [, RSP, SS if present])
+        iretq
+    )");
+    }
+
+/// ISR_NO_ERROR_CODE(n): push 0 (error), push n (interrupt number), jmp isr_common
+#define ISR_NO_ERROR_CODE(num)                                                                                                             \
+    extern "C" __attribute__((naked)) void isr##num() {                                                                                    \
+        asm volatile("cli\n\t"                                                                                                             \
+                     "pushq $0\n\t"                                                                                                        \
+                     "pushq $" #num "\n\t"                                                                                                 \
+                     "jmp isr_common\n");                                                                                                  \
+    }
+
+/// ISR_ERROR_CODE(n): push n (error), jmp isr_common
+#define ISR_ERROR_CODE(num)                                                                                                                \
+    extern "C" __attribute__((naked)) void isr##num() {                                                                                    \
+        asm volatile("cli\n\t"                                                                                                             \
+                     "pushq $" #num "\n\t"                                                                                                 \
+                     "jmp isr_common\n");                                                                                                  \
+    }
+
+    // Generate all exception stubs (0..31)
+    ISR_NO_ERROR_CODE(0)
+    ISR_NO_ERROR_CODE(1)
+    ISR_NO_ERROR_CODE(2)
+    ISR_NO_ERROR_CODE(3)
+    ISR_NO_ERROR_CODE(4)
+    ISR_NO_ERROR_CODE(5)
+    ISR_NO_ERROR_CODE(6)
+    ISR_NO_ERROR_CODE(7)
+    ISR_ERROR_CODE(8)
+    ISR_NO_ERROR_CODE(9)
+    ISR_ERROR_CODE(10)
+    ISR_ERROR_CODE(11)
+    ISR_ERROR_CODE(12)
+    ISR_ERROR_CODE(13)
+    ISR_ERROR_CODE(14)
+    ISR_NO_ERROR_CODE(15)
+    ISR_NO_ERROR_CODE(16)
+    ISR_NO_ERROR_CODE(17)
+    ISR_NO_ERROR_CODE(18)
+    ISR_NO_ERROR_CODE(19)
+    ISR_NO_ERROR_CODE(20)
+    ISR_NO_ERROR_CODE(21)
+    ISR_NO_ERROR_CODE(22)
+    ISR_NO_ERROR_CODE(23)
+    ISR_NO_ERROR_CODE(24)
+    ISR_NO_ERROR_CODE(25)
+    ISR_NO_ERROR_CODE(26)
+    ISR_NO_ERROR_CODE(27)
+    ISR_NO_ERROR_CODE(28)
+    ISR_NO_ERROR_CODE(29)
+    ISR_NO_ERROR_CODE(30)
+    ISR_NO_ERROR_CODE(31)
+
+    // Generate IRQ stubs (32..47)
+    ISR_NO_ERROR_CODE(32)
+    ISR_NO_ERROR_CODE(33)
+    ISR_NO_ERROR_CODE(34)
+    ISR_NO_ERROR_CODE(35)
+    ISR_NO_ERROR_CODE(36)
+    ISR_NO_ERROR_CODE(37)
+    ISR_NO_ERROR_CODE(38)
+    ISR_NO_ERROR_CODE(39)
+    ISR_NO_ERROR_CODE(40)
+    ISR_NO_ERROR_CODE(41)
+    ISR_NO_ERROR_CODE(42)
+    ISR_NO_ERROR_CODE(43)
+    ISR_NO_ERROR_CODE(44)
+    ISR_NO_ERROR_CODE(45)
+    ISR_NO_ERROR_CODE(46)
+    ISR_NO_ERROR_CODE(47)
+
+#undef ISR_NO_ERROR_CODE
+#undef ISR_ERROR_CODE
+
+    /// Initialize ISR handling: clear handler table, program PIC entries, enable PIC
     void init() {
-        utils::memset(handlers, 0, 16 * sizeof(handler_fn));
+        // zero handlers
+        utils::memset(handlers, 0, sizeof(handlers));
 
         pic::init();
 
-        // Exceptions
+        // Exceptions (0..31)
         pic::set(0, reinterpret_cast<uint64_t>(isr0), 0x8E);
         pic::set(1, reinterpret_cast<uint64_t>(isr1), 0x8E);
         pic::set(2, reinterpret_cast<uint64_t>(isr2), 0x8E);
@@ -100,7 +234,7 @@ namespace cosmos::isr {
         pic::set(30, reinterpret_cast<uint64_t>(isr30), 0x8E);
         pic::set(31, reinterpret_cast<uint64_t>(isr31), 0x8E);
 
-        // Interrupt requests
+        // IRQs (32..47)
         pic::set(32, reinterpret_cast<uint64_t>(isr32), 0x8E);
         pic::set(33, reinterpret_cast<uint64_t>(isr33), 0x8E);
         pic::set(34, reinterpret_cast<uint64_t>(isr34), 0x8E);
@@ -123,10 +257,14 @@ namespace cosmos::isr {
         serial::print("[isr] Initialized\n");
     }
 
+    /// Register an IRQ handler (0..15)
     void set(const uint8_t num, const handler_fn handler) {
-        handlers[num] = handler;
+        if (num < 16) {
+            handlers[num] = handler;
+        }
     }
 
+    /// Exception descriptions
     constexpr const char* EXCEPTIONS[] = {
         "Division By Zero",
         "Debug",
@@ -165,23 +303,32 @@ namespace cosmos::isr {
         "Reserved",
     };
 
+    /// C++ interrupt handler called from isr_common.
+    ///
+    /// info->interrupt is the interrupt number (0..47 etc.)
     extern "C" void isr_handler(InterruptInfo* info) {
-        // Exceptions (32)
+        if (!info) {
+            return;
+        }
+
+        // Exceptions (0..31) -> panic
         if (info->interrupt < 32) {
             serial::print("[cosmos] KERNEL PANIC\n");
-            serial::printf("[cosmos]     %s\n", EXCEPTIONS[info->interrupt]);
+            const char* name = "Unknown";
+            if (info->interrupt < (sizeof(EXCEPTIONS) / sizeof(EXCEPTIONS[0]))) {
+                name = EXCEPTIONS[info->interrupt];
+            }
+            serial::printf("[cosmos]     %s\n", name);
             utils::halt();
         }
 
-        // Interrupt requests (16)
+        // IRQs (32..47)
         if (info->interrupt < 48) {
-            const auto irq = info->interrupt - 32;
-
+            const auto irq = static_cast<uint8_t>(info->interrupt - 32);
             const auto handler = handlers[irq];
             if (handler) {
                 handler(info);
             }
-
             pic::end_irq(irq);
         }
     }
