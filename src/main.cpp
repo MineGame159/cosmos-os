@@ -3,12 +3,30 @@
 #include "memory/heap.hpp"
 #include "memory/physical.hpp"
 #include "memory/virtual.hpp"
+#include "scheduler/scheduler.hpp"
 #include "serial.hpp"
 #include "utils.hpp"
 
 using namespace cosmos;
 
-extern "C" [[noreturn]] void main() {
+[[noreturn]]
+void process1() {
+    for (;;) {
+        serial::print("[process 1] Hi\n");
+        scheduler::yield();
+    }
+}
+
+[[noreturn]]
+void process2() {
+    for (;;) {
+        serial::print("[process 2] Hello\n");
+        scheduler::yield();
+    }
+}
+
+extern "C" [[noreturn]]
+void main() {
     serial::init();
 
     if (!limine::init()) {
@@ -33,6 +51,13 @@ extern "C" [[noreturn]] void main() {
     pixels[1] = 0xFFFF0000;
     pixels[2] = 0xFF00FF00;
     pixels[3] = 0xFF0000FF;
+
+    scheduler::init();
+
+    scheduler::create_process(process1);
+    scheduler::create_process(process2);
+
+    scheduler::run();
 
     utils::halt();
 }

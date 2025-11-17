@@ -18,6 +18,7 @@ executable(
         'src/memory/physical.cpp',
         'src/memory/virtual.cpp',
         'src/memory/heap.cpp',
+        'src/scheduler/scheduler.cpp',
         'src/main.cpp'
     ],
     include_directories: include_directories(
