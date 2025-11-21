@@ -1,5 +1,6 @@
 #pragma once
 
+#include "memory/virtual.hpp"
 #include <cstdint>
 
 namespace cosmos::scheduler {
@@ -16,6 +17,7 @@ namespace cosmos::scheduler {
     void init();
 
     ProcessId create_process(ProcessFn fn);
+    ProcessId create_process(ProcessFn fn, memory::virt::Space space);
 
     State get_process_state(ProcessId id);
 

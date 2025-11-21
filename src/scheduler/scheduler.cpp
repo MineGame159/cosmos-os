@@ -11,6 +11,8 @@ namespace cosmos::scheduler {
         ProcessFn fn;
         State state;
 
+        memory::virt::Space space;
+
         void* stack;
         void* stack_top;
         uint64_t rsp;
@@ -79,6 +81,11 @@ namespace cosmos::scheduler {
     }
 
     ProcessId create_process(const ProcessFn fn) {
+        const auto space = memory::virt::create();
+        return create_process(fn, space);
+    }
+
+    ProcessId create_process(const ProcessFn fn, const memory::virt::Space space) {
         const auto process = memory::heap::alloc<Process>();
 
         if (head == nullptr) {
@@ -95,6 +102,8 @@ namespace cosmos::scheduler {
 
         process->fn = fn;
         process->state = State::Waiting;
+
+        process->space = space;
 
         process->stack = memory::heap::alloc(STACK_SIZE);
         process->stack_top = reinterpret_cast<void*>((reinterpret_cast<uint64_t>(process->stack) + STACK_SIZE) & ~0xFULL);
@@ -139,11 +148,14 @@ namespace cosmos::scheduler {
             if (head == old) head = old->next;
             if (tail == old) tail = prev;
 
+            memory::virt::destroy(old->space);
             memory::heap::free(old->stack);
             memory::heap::free(old);
         }
 
         current->state = State::Running;
+
+        memory::virt::switch_to(current->space);
         switch_to(&prev->rsp, current->rsp);
     }
 
@@ -157,6 +169,8 @@ namespace cosmos::scheduler {
         uint64_t old;
 
         current->state = State::Running;
+
+        memory::virt::switch_to(current->space);
         switch_to(&old, current->rsp);
     }
 } // namespace cosmos::scheduler

@@ -11,17 +11,27 @@
 using namespace cosmos;
 
 void process1() {
-    for (auto i = 0; i < 5; i++) {
-        serial::printf("[process 1] Hi %d\n", i);
+    memory::virt::map_pages(memory::virt::get_current(), 0, memory::phys::alloc_pages(1) / 4096ul, 1, false);
+
+    const auto i = reinterpret_cast<uint32_t*>(4);
+    *i = 0;
+
+    for (; *i < 5; (*i)++) {
+        serial::printf("[process 1] Hi %d\n", *i);
         scheduler::yield();
     }
 }
 
 void process2() {
-    for (auto i = 0; i < 10; i++) {
-        serial::printf("[process 2] Hello %d\n", i);
+    memory::virt::map_pages(memory::virt::get_current(), 0, memory::phys::alloc_pages(1) / 4096ul, 1, false);
 
-        if (i == 4) scheduler::exit();
+    const auto i = reinterpret_cast<uint32_t*>(4);
+    *i = 0;
+
+    for (; *i < 10; (*i)++) {
+        serial::printf("[process 2] Hello %d\n", *i);
+
+        if (*i == 4) scheduler::exit();
         scheduler::yield();
     }
 }
@@ -59,7 +69,7 @@ void main() {
     memory::heap::init();
 
     scheduler::init();
-    scheduler::create_process(init);
+    scheduler::create_process(init, space);
     scheduler::run();
 
     utils::halt();

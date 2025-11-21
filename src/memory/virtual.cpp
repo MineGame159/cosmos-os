@@ -95,11 +95,13 @@ namespace cosmos::memory::virt {
 
     // Space
 
-    static bool created_first_space = false;
+    static bool kernel_space_created = false;
+    static uint64_t kernel_first_pml4_entry = 0;
+    static uint64_t kernel_last_pml4_entry = 0;
 
     template <typename T>
     T* get_ptr_from_phys(const uint64_t phys) {
-        if (created_first_space) return reinterpret_cast<T*>(DIRECT_MAP + phys);
+        if (kernel_space_created) return reinterpret_cast<T*>(DIRECT_MAP + phys);
         return reinterpret_cast<T*>(limine::get_hhdm() + phys);
     }
 
@@ -158,13 +160,20 @@ namespace cosmos::memory::virt {
         return 0;                                                                                                                          \
     }
 
-        MAP(map_kernel)
-        MAP(map_framebuffer)
-        MAP(map_hhdm)
+        if (!kernel_space_created) {
+            MAP(map_kernel)
+            MAP(map_framebuffer)
+            MAP(map_hhdm)
+
+            kernel_space_created = true;
+            kernel_first_pml4_entry = pml4[256];
+            kernel_last_pml4_entry = pml4[511];
+        } else {
+            pml4[256] = kernel_first_pml4_entry;
+            pml4[511] = kernel_last_pml4_entry;
+        }
 
 #undef MAP
-
-        created_first_space = true;
 
         return space;
     }
