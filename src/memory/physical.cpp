@@ -119,6 +119,10 @@ namespace cosmos::memory::phys {
         return 0;
     }
 
+    void free_pages(const uint32_t first, const uint32_t count) {
+        mark_pages(first, count, false);
+    }
+
     uint32_t get_total_pages() {
         return total_pages;
     }
@@ -126,4 +130,4 @@ namespace cosmos::memory::phys {
     uint32_t get_used_pages() {
         return used_pages;
     }
-} // namespace cosmos::memory::physical
+} // namespace cosmos::memory::phys

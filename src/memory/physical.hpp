@@ -10,10 +10,12 @@ namespace cosmos::memory::phys {
      */
     uint64_t alloc_pages(uint32_t count);
 
+    void free_pages(uint32_t first, uint32_t count);
+
     uint32_t get_total_pages();
     uint32_t get_used_pages();
 
     inline uint32_t get_free_pages() {
         return get_total_pages() - get_used_pages();
     }
-} // namespace cosmos::memory::physical
+} // namespace cosmos::memory::phys

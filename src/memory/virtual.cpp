@@ -119,7 +119,7 @@ namespace cosmos::memory::virt {
         }
 
         serial::print("[mem - virt] Failed to find kernel memory range\n");
-        return true;
+        return false;
     }
 
     bool map_framebuffer(const Space space) {
@@ -136,7 +136,7 @@ namespace cosmos::memory::virt {
         }
 
         serial::print("[mem - virt] Failed to find framebuffer memory range\n");
-        return true;
+        return false;
     }
 
     bool map_hhdm(const Space space) {
@@ -185,8 +185,53 @@ namespace cosmos::memory::virt {
         return space;
     }
 
-    void destroy(Space space) {
-        // TODO: Not implemented
+    void destroy(const Space space) {
+        const auto pml4_table = get_ptr_from_phys<uint64_t>(space);
+
+        for (auto pml4_i = 0; pml4_i < 256; pml4_i++) {
+            const auto pml4_entry = pml4_table[pml4_i];
+            if (!entry_is_present(pml4_entry)) continue;
+            const auto pdp_table = get_ptr_from_phys<uint64_t>(pml4_entry & ADDRESS_MASK);
+
+            for (auto pdp_i = 0; pdp_i < 512; pdp_i++) {
+                const auto pdp_entry = pdp_table[pdp_i];
+                if (!entry_is_present(pdp_entry)) continue;
+
+                if (entry_is_direct(pdp_entry)) {
+                    phys::free_pages((pdp_entry & DIRECT_PDP_ADDRESS_MASK) / 4096ul, 512 * 512);
+                    continue;
+                }
+
+                const auto pd_table = get_ptr_from_phys<uint64_t>(pdp_entry & ADDRESS_MASK);
+
+                for (auto pd_i = 0; pd_i < 512; pd_i++) {
+                    const auto pd_entry = pd_table[pd_i];
+                    if (!entry_is_present(pd_entry)) continue;
+
+                    if (entry_is_direct(pd_entry)) {
+                        phys::free_pages((pd_entry & DIRECT_PD_ADDRESS_MASK) / 4096ul, 512);
+                        continue;
+                    }
+
+                    const auto pt_table = get_ptr_from_phys<uint64_t>(pd_entry & ADDRESS_MASK);
+
+                    for (auto pt_i = 0; pt_i < 512; pt_i++) {
+                        const auto pt_entry = pt_table[pt_i];
+                        if (!entry_is_present(pt_entry)) continue;
+
+                        phys::free_pages((pt_entry & ADDRESS_MASK) / 4096ul, 1);
+                    }
+
+                    phys::free_pages((pd_entry & ADDRESS_MASK) / 4096ul, 1);
+                }
+
+                phys::free_pages((pdp_entry & ADDRESS_MASK) / 4096ul, 1);
+            }
+
+            phys::free_pages((pml4_entry & ADDRESS_MASK) / 4096ul, 1);
+        }
+
+        phys::free_pages(space / 4096ul, 1);
     }
 
     uint64_t* get_child_table(uint64_t& entry) {
@@ -194,7 +239,7 @@ namespace cosmos::memory::virt {
             const auto child_table_phys = phys::alloc_pages(1);
             if (child_table_phys == 0) return nullptr;
 
-            const auto child_table = get_ptr_from_phys<uint64_t*>(child_table_phys);
+            const auto child_table = get_ptr_from_phys<uint64_t>(child_table_phys);
             utils::memset(child_table, 0, 4096);
 
             entry = (child_table_phys & ADDRESS_MASK) | FLAG_PRESENT | FLAG_WRITABLE;
@@ -220,7 +265,7 @@ namespace cosmos::memory::virt {
             // 1 gB
             if (virt % (512 * 512) == 0 && phys % (512 * 512) == 0 && count >= (512 * 512)) {
                 pdp_table[addr.pdp] = ((phys * 4096) & DIRECT_PDP_ADDRESS_MASK) | FLAG_DIRECT | flags;
-                if (invalidate) asm volatile("invlpg (%0)" ::"ri"(virt * 4096ul) : "memory");
+                if (invalidate) asm volatile("invlpg (%0)" ::"r"(virt * 4096ul) : "memory");
 
                 virt += 512 * 512;
                 phys += 512 * 512;
@@ -235,7 +280,7 @@ namespace cosmos::memory::virt {
             // 2 mB
             if (virt % 512 == 0 && phys % 512 == 0 && count >= 512) {
                 pd_table[addr.pd] = ((phys * 4096) & DIRECT_PD_ADDRESS_MASK) | FLAG_DIRECT | flags;
-                if (invalidate) asm volatile("invlpg (%0)" ::"ri"(virt * 4096ul) : "memory");
+                if (invalidate) asm volatile("invlpg (%0)" ::"r"(virt * 4096ul) : "memory");
 
                 virt += 512;
                 phys += 512;
@@ -249,7 +294,7 @@ namespace cosmos::memory::virt {
             if (pt_table == nullptr) return false;
 
             pt_table[addr.pt] = ((phys * 4096) & ADDRESS_MASK) | flags;
-            if (invalidate) asm volatile("invlpg (%0)" ::"ri"(virt * 4096ul) : "memory");
+            if (invalidate) asm volatile("invlpg (%0)" ::"r"(virt * 4096ul) : "memory");
 
             virt++;
             phys++;

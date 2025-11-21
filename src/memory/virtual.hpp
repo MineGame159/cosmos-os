@@ -23,6 +23,8 @@ namespace cosmos::memory::virt {
     Space create();
     Space get_current();
 
+    /// NOTE: This function frees not only the memory used for the paging tables BUT ALSO the memory pointed to by the paging table entries,
+    /// meaning it assumes full ownership of the underlying memory
     void destroy(Space space);
 
     bool map_pages(Space space, uint64_t virt, uint64_t phys, uint64_t count, bool cache_disabled);
