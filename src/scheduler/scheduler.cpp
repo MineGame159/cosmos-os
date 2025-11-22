@@ -27,9 +27,6 @@ namespace cosmos::scheduler {
 
     __attribute__((naked)) void switch_to(uint64_t* old_sp, uint64_t new_sp) {
         asm volatile(R"(
-            # Disable interrupts
-            cli
-
             # Save current process state to the stack
             pushfq
             push %rax
@@ -71,9 +68,6 @@ namespace cosmos::scheduler {
             pop %rbx
             pop %rax
             popfq
-
-            # Enable interrupts
-            sti
 
             # Return to the code the process was executing previously
             ret
@@ -129,40 +123,69 @@ namespace cosmos::scheduler {
         return reinterpret_cast<ProcessId>(process);
     }
 
+    ProcessId get_current_process() {
+        return reinterpret_cast<ProcessId>(current);
+    }
+
     State get_process_state(const ProcessId id) {
         return reinterpret_cast<Process*>(id)->state;
     }
 
     void yield() {
-        if (current->state != State::Exited) {
+        if (current->state == State::Running) {
             current->state = State::Waiting;
         }
 
-        const auto prev = current;
+        const auto old_process = current;
+
+        asm volatile("cli" ::: "memory");
+
+        auto prev = current;
         current = current->next;
 
-        while (current->state == State::Exited) {
-            if (current->next == current) {
-                serial::print("[scheduler] All processes exited, stopping\n");
-                utils::halt();
+        for (;;) {
+            if (current->state == State::Exited) {
+                if (current->next == current) {
+                    serial::print("[scheduler] All processes exited, stopping\n");
+                    utils::halt();
+                }
+
+                if (current != old_process) {
+                    const auto old = current;
+                    current = old->next;
+                    prev->next = current;
+
+                    if (head == old) head = old->next;
+                    if (tail == old) tail = prev;
+
+                    memory::virt::destroy(old->space);
+                    memory::heap::free(old->stack);
+                    memory::heap::free(old);
+
+                    continue;
+                }
             }
 
-            const auto old = current;
-            current = old->next;
-            prev->next = old->next;
+            if (current->state == State::Waiting) {
+                break;
+            }
 
-            if (head == old) head = old->next;
-            if (tail == old) tail = prev;
+            if (current == old_process) {
+                asm volatile("sti; hlt; cli" ::: "memory");
+            }
 
-            memory::virt::destroy(old->space);
-            memory::heap::free(old->stack);
-            memory::heap::free(old);
+            prev = current;
+            current = current->next;
         }
 
         current->state = State::Running;
 
-        memory::virt::switch_to(current->space);
-        switch_to(&prev->rsp, current->rsp);
+        if (old_process != current) {
+            memory::virt::switch_to(current->space);
+            switch_to(&old_process->rsp, current->rsp);
+        }
+
+        asm volatile("sti" ::: "memory");
     }
 
     void exit() {
@@ -170,7 +193,22 @@ namespace cosmos::scheduler {
         yield();
     }
 
+    void suspend() {
+        current->state = State::Suspended;
+        yield();
+    }
+
+    void resume(const ProcessId id) {
+        const auto process = reinterpret_cast<Process*>(id);
+
+        if (process->state == State::Suspended) {
+            process->state = State::Waiting;
+        }
+    }
+
     void run() {
+        asm volatile("cli" ::: "memory");
+
         current = head;
         uint64_t old;
 

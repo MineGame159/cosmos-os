@@ -1,6 +1,7 @@
 #include "ps2kbd.hpp"
 
 #include "interrupts/isr.hpp"
+#include "scheduler/scheduler.hpp"
 #include "serial.hpp"
 #include "utils.hpp"
 
@@ -111,6 +112,8 @@ namespace cosmos::devices::ps2kbd {
     static uint32_t buffer_write_index = 0;
     static uint32_t buffer_read_index = 0;
 
+    static scheduler::ProcessId waiting_process = 0;
+
     void on_data([[maybe_unused]] isr::InterruptInfo* info) {
         const auto data = utils::byte_in(DATA);
 
@@ -161,6 +164,12 @@ namespace cosmos::devices::ps2kbd {
                 };
 
                 buffer_write_index = next_write_index;
+
+                // Resume waiting process
+                if (waiting_process != 0) {
+                    scheduler::resume(waiting_process);
+                    waiting_process = 0;
+                }
             }
         }
 
@@ -250,17 +259,22 @@ namespace cosmos::devices::ps2kbd {
 
     Event wait_for_event() {
         for (;;) {
-            asm volatile("cli");
+            // Check for an available event in the buffer
+            asm volatile("cli" ::: "memory");
 
             if (buffer_read_index != buffer_write_index) {
                 const auto event = buffer[buffer_read_index];
                 buffer_read_index = (buffer_read_index + 1) % BUFFER_SIZE;
 
-                asm volatile("sti");
+                asm volatile("sti" ::: "memory");
                 return event;
             }
 
-            asm volatile("sti; hlt");
+            asm volatile("sti" ::: "memory");
+
+            // Suspend current process
+            waiting_process = scheduler::get_current_process();
+            scheduler::suspend();
         }
     }
 
