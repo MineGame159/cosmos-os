@@ -36,7 +36,7 @@ executable(
         '-m64', '-march=x86-64',
         '-mno-red-zone', '-fno-omit-frame-pointer',
         '-O0', '-g',
-        '-mno-mmx', '-mno-3dnow', '-mno-avx', '-mno-avx2', '-mno-avx512f',
+        '-mno-mmx', '-mno-3dnow', '-mno-sse', '-mno-avx', '-mno-avx2', '-mno-avx512f',
         '-fno-stack-protector', '-fno-stack-check',
         '-fno-exceptions', '-fno-rtti',
         '-fno-asynchronous-unwind-tables',
