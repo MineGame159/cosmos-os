@@ -257,23 +257,31 @@ namespace cosmos::devices::ps2kbd {
         asm volatile("sti");
     }
 
-    Event wait_for_event() {
-        for (;;) {
-            // Check for an available event in the buffer
-            asm volatile("cli" ::: "memory");
+    bool try_get_event(Event& event) {
+        asm volatile("cli" ::: "memory");
 
-            if (buffer_read_index != buffer_write_index) {
-                const auto event = buffer[buffer_read_index];
-                buffer_read_index = (buffer_read_index + 1) % BUFFER_SIZE;
-
-                asm volatile("sti" ::: "memory");
-                return event;
-            }
+        if (buffer_read_index != buffer_write_index) {
+            event = buffer[buffer_read_index];
+            buffer_read_index = (buffer_read_index + 1) % BUFFER_SIZE;
 
             asm volatile("sti" ::: "memory");
+            return true;
+        }
 
-            // Suspend current process
-            waiting_process = scheduler::get_current_process();
+        asm volatile("sti" ::: "memory");
+        return false;
+    }
+
+    void resume_on_event() {
+        waiting_process = scheduler::get_current_process();
+    }
+
+    Event wait_for_event() {
+        for (;;) {
+            Event event;
+            if (try_get_event(event)) return event;
+
+            resume_on_event();
             scheduler::suspend();
         }
     }

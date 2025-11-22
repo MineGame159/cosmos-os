@@ -19,6 +19,7 @@ executable(
         'src/memory/virtual.cpp',
         'src/memory/heap.cpp',
         'src/scheduler/scheduler.cpp',
+        'src/devices/pit.cpp',
         'src/devices/ps2kbd.cpp',
         'src/shell/font.cpp',
         'src/shell/commands.cpp',

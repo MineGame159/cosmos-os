@@ -1,3 +1,4 @@
+#include "devices/pit.hpp"
 #include "devices/ps2kbd.hpp"
 #include "interrupts/isr.hpp"
 #include "limine.hpp"
@@ -12,6 +13,7 @@
 using namespace cosmos;
 
 void init() {
+    devices::pit::start();
     devices::ps2kbd::init();
 
     serial::printf("[cosmos] %s\n", "Initialized");

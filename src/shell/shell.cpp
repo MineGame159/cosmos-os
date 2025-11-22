@@ -1,11 +1,13 @@
 #include "shell.hpp"
 
 #include "commands.hpp"
+#include "devices/pit.hpp"
 #include "devices/ps2kbd.hpp"
 #include "font.hpp"
 #include "limine.hpp"
 #include "memory/offsets.hpp"
 #include "nanoprintf.h"
+#include "scheduler/scheduler.hpp"
 #include "utils.hpp"
 
 #include <cstdint>
@@ -15,13 +17,21 @@ namespace cosmos::shell {
     static uint32_t width;
     static uint32_t height;
 
-    static uint32_t cursor_x;
-    static uint32_t cursor_y;
+    static uint32_t cursor_x = 0;
+    static uint32_t cursor_y = 0;
+    static bool cursor_visible = false;
 
     static Color fg_color;
 
+    static scheduler::ProcessId process;
+
     static bool caps_lock = false;
     static bool shift = false;
+
+    void blink_cursor([[maybe_unused]] uint64_t data) {
+        cursor_visible = !cursor_visible;
+        scheduler::resume(process);
+    }
 
     void run() {
         const auto fb = limine::get_framebuffer();
@@ -30,10 +40,11 @@ namespace cosmos::shell {
         width = fb.width / FONT_WIDTH;
         height = fb.height / FONT_HEIGHT;
 
-        cursor_x = 0;
-        cursor_y = 0;
-
         fg_color = WHITE;
+
+        process = scheduler::get_current_process();
+
+        devices::pit::run_every_x_ms(500, blink_cursor, 0);
 
         for (;;) {
             print("> ");
@@ -113,14 +124,14 @@ namespace cosmos::shell {
         print(buffer);
     }
 
-    void clear_cell() {
+    void fill_cell(const uint32_t pixel) {
         const auto base_x = cursor_x * FONT_WIDTH;
         const auto base_y = cursor_y * FONT_HEIGHT;
         const auto line_size = width * FONT_WIDTH;
 
         for (auto x = 0u; x < FONT_WIDTH; x++) {
             for (auto y = 0u; y < FONT_HEIGHT; y++) {
-                pixels[(base_y + y) * line_size + (base_x + x)] = 0xFF000000;
+                pixels[(base_y + y) * line_size + (base_x + x)] = pixel;
             }
         }
     }
@@ -173,7 +184,15 @@ namespace cosmos::shell {
         auto size = 0u;
 
         for (;;) {
-            const auto event = devices::ps2kbd::wait_for_event();
+            fill_cell(cursor_visible ? 0xFFFFFFFF : 0xFF000000);
+
+            devices::ps2kbd::Event event;
+
+            if (!devices::ps2kbd::try_get_event(event)) {
+                devices::ps2kbd::resume_on_event();
+                scheduler::suspend();
+                continue;
+            }
 
             if ((event.key == devices::ps2kbd::Key::Enter || event.key == devices::ps2kbd::Key::NumEnter) && event.press) {
                 if (size > 0) break;
@@ -181,10 +200,12 @@ namespace cosmos::shell {
 
             if (event.key == devices::ps2kbd::Key::Backspace && event.press) {
                 if (size > 0) {
+                    if (cursor_visible) fill_cell(0xFF000000);
+
                     size--;
                     cursor_x--;
 
-                    clear_cell();
+                    fill_cell(0xFF000000);
                 }
 
                 continue;
@@ -193,10 +214,15 @@ namespace cosmos::shell {
             char ch[2];
             if (get_char_from_event(event, ch[0]) && size < length - 1) {
                 buffer[size++] = ch[0];
+
+                if (cursor_visible) fill_cell(0xFF000000);
+
                 ch[1] = '\0';
                 print(ch);
             }
         }
+
+        if (cursor_visible) fill_cell(0xFF000000);
 
         print("\n");
         buffer[size] = '\0';

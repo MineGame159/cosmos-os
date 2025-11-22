@@ -143,5 +143,9 @@ namespace cosmos::devices::ps2kbd {
     void init();
 
     void reset_buffer();
+
+    bool try_get_event(Event& event);
+    void resume_on_event();
+
     Event wait_for_event();
 } // namespace cosmos::devices::ps2kbd
