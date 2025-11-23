@@ -10,6 +10,9 @@
 #include "scheduler/scheduler.hpp"
 #include "utils.hpp"
 
+#include "memory/heap.hpp"
+#include "vfs/path.hpp"
+
 #include <cstdint>
 
 namespace cosmos::shell {
@@ -28,6 +31,97 @@ namespace cosmos::shell {
     static bool caps_lock = false;
     static bool shift = false;
 
+    // Shell-owned CWD string. Always an absolute path.
+    // If heap_allocated is true then cwd points to heap memory that must be freed when replaced.
+    // Otherwise, it points to static "/".
+    static char* cwd = nullptr;
+    static bool cwd_heap_allocated = false;
+
+    const char* get_cwd() {
+        if (cwd == nullptr) return "/";
+        return cwd;
+    }
+
+    bool set_cwd(const char* absolute_path) {
+        if (absolute_path == nullptr) return false;
+
+        const auto len = vfs::check_abs_path(absolute_path);
+        if (len == 0) return false;
+
+        auto* copy = static_cast<char*>(memory::heap::alloc(len + 1));
+        utils::memcpy(copy, absolute_path, len);
+        copy[len] = '\0';
+
+        if (cwd_heap_allocated && cwd != nullptr) {
+            memory::heap::free(cwd);
+        }
+
+        cwd = copy;
+        cwd_heap_allocated = true;
+        return true;
+    }
+
+    // Print the interactive prompt with a colored, bracketed and shortened cwd.
+    static void print_prompt() {
+        constexpr auto MAX_PROMPT_LEN = 32u;
+        char buf[64];
+
+        const auto cwd_str = get_cwd();
+        const auto cwd_len = utils::strlen(cwd_str);
+
+        if (cwd_len <= MAX_PROMPT_LEN) {
+            utils::memcpy(buf, cwd_str, cwd_len);
+            buf[cwd_len] = '\0';
+
+            print(DARK_CYAN, "[");
+            print(CYAN, buf);
+            print(DARK_CYAN, "]");
+            print(WHITE, " > ");
+            return;
+        }
+
+        // shorten with ellipsis, keep trailing segments up to MAX_PROMPT_LEN
+        uint32_t take = 0;
+        for (auto i = cwd_len; i > 0 && take < MAX_PROMPT_LEN - 5; ) {
+            auto j = i;
+            while (j > 0 && cwd_str[j - 1] != '/') j--;
+            const auto seg_len = i - j;
+
+            if (take + seg_len + 1 > MAX_PROMPT_LEN - 5) break;
+
+            take += seg_len + 1; // include the '/'
+            i = (j > 0) ? j - 1 : 0;
+            if (i == 0) break;
+        }
+
+        if (take == 0) {
+            take = MAX_PROMPT_LEN - 5;
+        }
+
+        const auto start = (cwd_len > take) ? (cwd_len - take) : 0;
+
+        // build inner as "/...<trailing>"
+        buf[0] = '/';
+        buf[1] = '.';
+        buf[2] = '.';
+        buf[3] = '.';
+
+        const auto copy_len = cwd_len - start;
+        if (copy_len + 4 >= sizeof(buf) - 1) {
+            const auto allowed = sizeof(buf) - 1 - 4;
+            utils::memcpy(&buf[4], &cwd_str[cwd_len - allowed], allowed);
+            buf[4 + allowed] = '\0';
+        } else {
+            utils::memcpy(&buf[4], &cwd_str[start], copy_len);
+            buf[4 + copy_len] = '\0';
+        }
+
+        print(DARK_CYAN, "[");
+        print(CYAN, buf);
+        print(DARK_CYAN, "]");
+        print(WHITE, " > ");
+    }
+
     void blink_cursor([[maybe_unused]] uint64_t data) {
         cursor_visible = !cursor_visible;
         scheduler::resume(process);
@@ -44,10 +138,14 @@ namespace cosmos::shell {
 
         process = scheduler::get_current_process();
 
+        // initialize cwd to root
+        cwd = const_cast<char*>("/");
+        cwd_heap_allocated = false;
+
         devices::pit::run_every_x_ms(500, blink_cursor, 0);
 
         for (;;) {
-            print("> ");
+            print_prompt();
 
             char prompt[128];
             read(prompt, 128);

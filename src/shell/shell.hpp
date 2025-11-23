@@ -15,6 +15,13 @@ namespace cosmos::shell {
 
     void read(char* buffer, uint32_t length);
 
+    // Get the shell's current working directory (owned by shell, do not free)
+    const char* get_cwd();
+
+    // Set the shell's current working directory. Expects an absolute path.
+    // Returns true on success, false on invalid path.
+    bool set_cwd(const char* absolute_path);
+
     inline void printf(const char* fmt, ...) {
         va_list args;
         va_start(args, fmt);

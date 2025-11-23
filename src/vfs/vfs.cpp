@@ -107,4 +107,22 @@ namespace cosmos::vfs {
         dir->ops->close(dir->handle);
         memory::heap::free(dir);
     }
+
+    bool make_dir(const char* path) {
+        const char* fs_path;
+        const auto fs = get_fs(path, fs_path);
+        if (fs == nullptr) return false;
+
+        if (fs->ops->make_dir == nullptr) return false;
+        return fs->ops->make_dir(fs->handle, fs_path);
+    }
+
+    bool remove(const char* path) {
+        const char* fs_path;
+        const auto fs = get_fs(path, fs_path);
+        if (fs == nullptr) return false;
+
+        if (fs->ops->remove == nullptr) return false;
+        return fs->ops->remove(fs->handle, fs_path);
+    }
 } // namespace cosmos::vfs

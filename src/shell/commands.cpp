@@ -5,6 +5,7 @@
 #include "shell.hpp"
 #include "utils.hpp"
 #include "vfs/vfs.hpp"
+#include "vfs/path.hpp"
 
 namespace cosmos::shell {
     struct Command {
@@ -12,6 +13,26 @@ namespace cosmos::shell {
         const char* description;
         const CommandFn fn;
     };
+
+    static char* resolve_or_default(const char* arg) {
+        const char* target = utils::str_trim_left(arg);
+        if (*target == '\0') {
+            const auto cwd = get_cwd();
+            const auto len = vfs::check_abs_path(cwd);
+            if (len == 0) return nullptr;
+            const auto out = static_cast<char*>(memory::heap::alloc(len + 1));
+            utils::memcpy(out, cwd, len);
+            out[len] = '\0';
+            return out;
+        }
+
+        char* resolved = vfs::resolve_path(get_cwd(), target);
+        if (!resolved) {
+            print(RED, "Invalid path\n");
+        }
+
+        return resolved;
+    }
 
     void meminfo([[maybe_unused]] const char* args) {
         print("Total");
@@ -31,11 +52,19 @@ namespace cosmos::shell {
         const auto path_length = space >= 0 ? space : utils::strlen(args);
         const auto path = utils::strdup(args, path_length);
 
-        const auto file = vfs::open_file(path, vfs::Mode::Write);
+        char* resolved = vfs::resolve_path(get_cwd(), path);
         memory::heap::free(path);
+
+        if (resolved == nullptr) {
+            print(RED, "Invalid path\n");
+            return;
+        }
+
+        const auto file = vfs::open_file(resolved, vfs::Mode::Write);
 
         if (file == nullptr) {
             print(RED, "Failed to open file\n");
+            memory::heap::free(resolved);
             return;
         }
 
@@ -44,13 +73,19 @@ namespace cosmos::shell {
 
         file->ops->write(file->handle, data, data_length);
         vfs::close_file(file);
+
+        memory::heap::free(resolved);
     }
 
     void cat(const char* args) {
-        const auto file = vfs::open_file(args, vfs::Mode::Read);
+        char* resolved = resolve_or_default(args);
+        if (resolved == nullptr) return;
+
+        const auto file = vfs::open_file(resolved, vfs::Mode::Read);
 
         if (file == nullptr) {
             print(RED, "Failed to open file\n");
+            memory::heap::free(resolved);
             return;
         }
 
@@ -66,13 +101,18 @@ namespace cosmos::shell {
         print("\n");
 
         memory::heap::free(str);
+        memory::heap::free(resolved);
     }
 
     void ls(const char* args) {
-        const auto dir = vfs::open_dir(args);
+        char* resolved = resolve_or_default(args);
+        if (resolved == nullptr) return;
+
+        const auto dir = vfs::open_dir(resolved);
 
         if (dir == nullptr) {
             print(RED, "Failed to open directory\n");
+            memory::heap::free(resolved);
             return;
         }
 
@@ -84,15 +124,104 @@ namespace cosmos::shell {
         }
 
         vfs::close_dir(dir);
+        memory::heap::free(resolved);
+    }
+
+    void cd(const char* args) {
+        const char* target = utils::str_trim_left(args);
+        if (*target == '\0') target = "/";
+
+        char* resolved = vfs::resolve_path(get_cwd(), target);
+        if (resolved == nullptr) {
+            print(RED, "Invalid path\n");
+            return;
+        }
+
+        const auto dir = vfs::open_dir(resolved);
+        if (dir == nullptr) {
+            print(RED, "Not a directory\n");
+            memory::heap::free(resolved);
+            return;
+        }
+
+        vfs::close_dir(dir);
+
+        if (!set_cwd(resolved)) {
+            print(RED, "Failed to set cwd\n");
+            memory::heap::free(resolved);
+            return;
+        }
+
+        memory::heap::free(resolved);
     }
 
     void help([[maybe_unused]] const char* args);
+
+    void mkdir_cmd(const char* args) {
+        const auto path = utils::str_trim_left(args);
+        if (*path == '\0') {
+            print(RED, "Missing path\n");
+            return;
+        }
+
+        char* resolved = vfs::resolve_path(get_cwd(), path);
+        if (resolved == nullptr) {
+            print(RED, "Invalid path\n");
+            return;
+        }
+
+        if (!vfs::make_dir(resolved)) {
+            print(RED, "Failed to create directory\n");
+            memory::heap::free(resolved);
+            return;
+        }
+
+        memory::heap::free(resolved);
+    }
+
+    void pwd([[maybe_unused]] const char* args) {
+        const auto cwd = get_cwd();
+        print(cwd);
+        print("\n");
+    }
+
+    void rm_cmd(const char* args) {
+        const auto path = utils::str_trim_left(args);
+        if (*path == '\0') {
+            print(RED, "Missing path\n");
+            return;
+        }
+
+        char* resolved = vfs::resolve_path(get_cwd(), path);
+        if (resolved == nullptr) {
+            print(RED, "Invalid path\n");
+            return;
+        }
+
+        if (!vfs::remove(resolved)) {
+            print(RED, "Failed to remove\n");
+            memory::heap::free(resolved);
+            return;
+        }
+
+        memory::heap::free(resolved);
+    }
+
+    void rmdir_cmd(const char* args) {
+        // same as rm for now, ramfs remove only removes empty directories
+        rm_cmd(args);
+    }
 
     static constexpr Command commands[] = {
         { "meminfo", "Display memory information", meminfo },
         { "touch", "Creates and writes a file", touch },
         { "cat", "Reads a file", cat },
         { "ls", "Lists children of a directory", ls },
+        { "mkdir", "Create directory", mkdir_cmd },
+        { "pwd", "Print working directory", pwd },
+        { "rm", "Remove file or empty directory", rm_cmd },
+        { "rmdir", "Remove empty directory", rmdir_cmd },
+        { "cd", "Change directory", cd },
         { "help", "Display all available commands", help },
     };
 

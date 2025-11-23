@@ -40,6 +40,8 @@ namespace cosmos::vfs {
     struct FsOps {
         File* (*open_file)(void* handle, const char* path, Mode mode);
         Directory* (*open_dir)(void* handle, const char* path);
+        bool (*make_dir)(void* handle, const char* path);
+        bool (*remove)(void* handle, const char* path);
     };
 
     struct Fs {
@@ -54,4 +56,12 @@ namespace cosmos::vfs {
 
     Directory* open_dir(const char* path);
     void close_dir(Directory* dir);
+
+    // Create a directory at the given absolute path.
+    // Returns true on success.
+    bool make_dir(const char* path);
+
+    // Remove a file or an empty directory at the given absolute path.
+    // Returns true on success.
+    bool remove(const char* path);
 } // namespace cosmos::vfs

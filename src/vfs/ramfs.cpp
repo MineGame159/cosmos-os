@@ -241,9 +241,145 @@ namespace cosmos::vfs::ramfs {
         return dir;
     }
 
+    bool fs_make_dir(void* handle, const char* path) {
+        if (path == nullptr) return false;
+
+        // If requesting root, it's already present
+        if (path[0] == '/' && path[1] == '\0') return true;
+
+        // Work on subpath without leading '/'
+        const char* p = path;
+        if (*p == '/') p++;
+
+        auto* node = static_cast<Node*>(handle);
+
+        // Walk segments, create the final segment only if its parent exists.
+        while (*p != '\0') {
+            const char* seg = p;
+            uint32_t seg_len = 0;
+            while (p[seg_len] != '/' && p[seg_len] != '\0') seg_len++;
+
+            // If this is the final segment
+            if (p[seg_len] == '\0') {
+                // Check if already exists
+                const auto existing = node->find_child(seg, seg_len);
+                if (existing != nullptr) {
+                    // If it's a file, fail; if dir, succeed
+                    return !existing->is_file;
+                }
+
+                // Create new directory node under current node
+                const auto new_node = alloc_node(seg, seg_len);
+                new_node->is_file = false;
+                new_node->dir.children_head = nullptr;
+                new_node->dir.children_tail = nullptr;
+                new_node->dir.opened = false;
+                new_node->dir.child = nullptr;
+
+                node->add_child(new_node);
+                return true;
+            }
+
+            // Not final segment: must already exist and be a directory
+            const auto child = node->find_child(seg, seg_len);
+            if (child == nullptr || child->is_file) return false;
+
+            // Advance to next segment
+            node = child;
+            p += seg_len;
+            while (*p == '/') p++;
+        }
+
+        return false;
+    }
+
+    bool fs_remove(void* handle, const char* path) {
+        if (path == nullptr) return false;
+
+        // Don't allow removing root
+        if (path[0] == '/' && path[1] == '\0') return false;
+
+        // Work on subpath without leading '/'
+        const char* p = path;
+        if (*p == '/') p++;
+
+        auto node = static_cast<Node*>(handle);
+        Node* parent = nullptr;
+
+        // Walk to target node
+        while (*p != '\0') {
+            const char* seg = p;
+            uint32_t seg_len = 0;
+            while (p[seg_len] != '/' && p[seg_len] != '\0') seg_len++;
+
+            const auto child = node->find_child(seg, seg_len);
+            if (child == nullptr) return false;
+
+            parent = node;
+            node = child;
+
+            if (p[seg_len] == '\0') break;
+            p += seg_len;
+            while (*p == '/') p++;
+        }
+
+        if (parent == nullptr) return false; // target has no parent, shouldn't happen except root
+
+        // Remove file
+        if (node->is_file) {
+            if (node->file.opened) return false;
+
+            if (node->file.data != nullptr) {
+                memory::heap::free(node->file.data);
+            }
+
+            // unlink from parent's child list
+            Node* cur = parent->dir.children_head;
+            Node* prev = nullptr;
+            while (cur != nullptr && cur != node) {
+                prev = cur;
+                cur = cur->next_child;
+            }
+
+            if (cur == nullptr) return false;
+
+            if (prev == nullptr) parent->dir.children_head = cur->next_child;
+            else prev->next_child = cur->next_child;
+
+            if (parent->dir.children_tail == cur) parent->dir.children_tail = prev;
+
+            memory::heap::free(cur);
+            return true;
+        }
+
+        // Remove directory (must be empty and not opened)
+        if (node->dir.opened) return false;
+        if (node->dir.children_head != nullptr) return false;
+
+        // unlink from parent
+        Node* cur = parent->dir.children_head;
+        Node* prev = nullptr;
+        while (cur != nullptr && cur != node) {
+            prev = cur;
+            cur = cur->next_child;
+        }
+
+        if (cur == nullptr) return false;
+
+        if (prev == nullptr) parent->dir.children_head = cur->next_child;
+        else prev->next_child = cur->next_child;
+
+        if (parent->dir.children_tail == cur) parent->dir.children_tail = prev;
+
+        memory::heap::free(cur);
+        return true;
+    }
+
     static constexpr FsOps fs_ops = {
         .open_file = fs_open_file,
         .open_dir = fs_open_dir,
+        .make_dir = fs_make_dir,
+        .remove = fs_remove,
     };
 
     void create(Fs* fs) {
