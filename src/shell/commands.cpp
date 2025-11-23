@@ -31,7 +31,7 @@ namespace cosmos::shell {
         const auto path_length = space >= 0 ? space : utils::strlen(args);
         const auto path = utils::strdup(args, path_length);
 
-        const auto file = vfs::open(path, vfs::Mode::Write);
+        const auto file = vfs::open_file(path, vfs::Mode::Write);
         memory::heap::free(path);
 
         if (file == nullptr) {
@@ -43,11 +43,11 @@ namespace cosmos::shell {
         const auto data_length = utils::strlen(data);
 
         file->ops->write(file->handle, data, data_length);
-        vfs::close(file);
+        vfs::close_file(file);
     }
 
     void cat(const char* args) {
-        const auto file = vfs::open(args, vfs::Mode::Read);
+        const auto file = vfs::open_file(args, vfs::Mode::Read);
 
         if (file == nullptr) {
             print(RED, "Failed to open file\n");
@@ -60,12 +60,30 @@ namespace cosmos::shell {
         const auto str = static_cast<char*>(memory::heap::alloc(length + 1));
         file->ops->read(file->handle, str, length);
         str[length] = '\0';
-        vfs::close(file);
+        vfs::close_file(file);
 
         print(str);
         print("\n");
 
         memory::heap::free(str);
+    }
+
+    void ls(const char* args) {
+        const auto dir = vfs::open_dir(args);
+
+        if (dir == nullptr) {
+            print(RED, "Failed to open directory\n");
+            return;
+        }
+
+        const char* child;
+
+        while ((child = dir->ops->read(dir->handle)) != nullptr) {
+            print(child);
+            print("\n");
+        }
+
+        vfs::close_dir(dir);
     }
 
     void help([[maybe_unused]] const char* args);
@@ -74,6 +92,7 @@ namespace cosmos::shell {
         { "meminfo", "Display memory information", meminfo },
         { "touch", "Creates and writes a file", touch },
         { "cat", "Reads a file", cat },
+        { "ls", "Lists children of a directory", ls },
         { "help", "Display all available commands", help },
     };
 

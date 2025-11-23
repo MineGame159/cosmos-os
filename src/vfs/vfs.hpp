@@ -21,6 +21,16 @@ namespace cosmos::vfs {
         const FileOps* ops;
     };
 
+    struct DirOps {
+        const char* (*read)(void* handle);
+        void (*close)(void* handle);
+    };
+
+    struct Directory {
+        void* handle;
+        const DirOps* ops;
+    };
+
     enum class Mode : uint8_t {
         Read,
         Write,
@@ -28,7 +38,8 @@ namespace cosmos::vfs {
     };
 
     struct FsOps {
-        File* (*open)(void* handle, const char* path, Mode mode);
+        File* (*open_file)(void* handle, const char* path, Mode mode);
+        Directory* (*open_dir)(void* handle, const char* path);
     };
 
     struct Fs {
@@ -38,6 +49,9 @@ namespace cosmos::vfs {
 
     Fs* mount(const char* path);
 
-    File* open(const char* path, Mode mode);
-    void close(File* file);
+    File* open_file(const char* path, Mode mode);
+    void close_file(File* file);
+
+    Directory* open_dir(const char* path);
+    void close_dir(Directory* dir);
 } // namespace cosmos::vfs

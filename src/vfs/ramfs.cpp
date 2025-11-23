@@ -7,9 +7,12 @@
 namespace cosmos::vfs::ramfs {
     struct Node;
 
-    struct NodeFolder {
+    struct NodeDir {
         Node* children_head;
         Node* children_tail;
+
+        bool opened;
+        Node* child;
     };
 
     struct NodeFile {
@@ -31,13 +34,13 @@ namespace cosmos::vfs::ramfs {
         bool is_file;
 
         union {
-            NodeFolder folder;
+            NodeDir dir;
             NodeFile file;
         };
 
         Node* find_child(const char* child_name, const uint32_t child_name_length) const {
             if (is_file) return nullptr;
-            auto child = folder.children_head;
+            auto child = dir.children_head;
 
             while (child != nullptr) {
                 if (utils::streq(child->name, child->name_length, child_name, child_name_length)) {
@@ -53,12 +56,12 @@ namespace cosmos::vfs::ramfs {
         void add_child(Node* node) {
             if (is_file) return;
 
-            if (folder.children_head == nullptr) {
-                folder.children_head = node;
-                folder.children_tail = node;
+            if (dir.children_head == nullptr) {
+                dir.children_head = node;
+                dir.children_tail = node;
             } else {
-                folder.children_tail->next_child = node;
-                folder.children_tail = node;
+                dir.children_tail->next_child = node;
+                dir.children_tail = node;
             }
         }
     };
@@ -140,6 +143,28 @@ namespace cosmos::vfs::ramfs {
         .close = file_close,
     };
 
+    const char* dir_read(void* handle) {
+        const auto node = static_cast<Node*>(handle);
+
+        if (node->dir.child != nullptr) {
+            const auto child = node->dir.child;
+            node->dir.child = child->next_child;
+            return child->name;
+        }
+
+        return nullptr;
+    }
+
+    void dir_close(void* handle) {
+        const auto node = static_cast<Node*>(handle);
+        node->dir.opened = false;
+    }
+
+    static constexpr DirOps dir_ops = {
+        .read = dir_read,
+        .close = dir_close,
+    };
+
     Node* alloc_node(const char* name, const uint32_t name_length) {
         const auto node = static_cast<Node*>(memory::heap::alloc(sizeof(Node) + name_length + 1, alignof(Node)));
         utils::memset(node, 0, sizeof(Node) + name_length + 1);
@@ -151,10 +176,9 @@ namespace cosmos::vfs::ramfs {
         return node;
     }
 
-    File* fs_open(void* handle, const char* path, const Mode mode) {
-        Node* prev = nullptr;
+    Node* find_node(void* handle, const char* path, Node*& prev, PathEntryIt& it) {
         auto node = static_cast<Node*>(handle);
-        auto it = iterate_path_entries(path);
+        it = iterate_path_entries(path);
 
         while (it.next()) {
             prev = node;
@@ -166,6 +190,14 @@ namespace cosmos::vfs::ramfs {
             }
         }
 
+        return node;
+    }
+
+    File* fs_open_file(void* handle, const char* path, const Mode mode) {
+        Node* prev = nullptr;
+        PathEntryIt it;
+
+        auto node = find_node(handle, path, prev, it);
         if (prev == nullptr) return nullptr;
 
         if (node == nullptr && (mode == Mode::Write || mode == Mode::ReadWrite)) {
@@ -192,8 +224,26 @@ namespace cosmos::vfs::ramfs {
         return nullptr;
     }
 
+    Directory* fs_open_dir(void* handle, const char* path) {
+        Node* prev = nullptr;
+        PathEntryIt it;
+
+        const auto node = find_node(handle, path, prev, it);
+        if (node == nullptr || node->is_file || node->dir.opened) return nullptr;
+
+        node->dir.opened = true;
+        node->dir.child = node->dir.children_head;
+
+        const auto dir = memory::heap::alloc<Directory>();
+        dir->handle = node;
+        dir->ops = &dir_ops;
+
+        return dir;
+    }
+
     static constexpr FsOps fs_ops = {
-        .open = fs_open,
+        .open_file = fs_open_file,
+        .open_dir = fs_open_dir,
     };
 
     void create(Fs* fs) {

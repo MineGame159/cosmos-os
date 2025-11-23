@@ -41,7 +41,7 @@ namespace cosmos::vfs {
         return &mount->fs;
     }
 
-    File* open(const char* path, const Mode mode) {
+    const Fs* get_fs(const char* path, const char*& fs_path) {
         const auto length = check_abs_path(path);
         if (length == 0) return nullptr;
 
@@ -75,14 +75,36 @@ namespace cosmos::vfs {
                 subpath = &path[longest_mount_length];
             }
 
-            return fs->ops->open(fs->handle, subpath, mode);
+            fs_path = subpath;
+            return fs;
         }
 
         return nullptr;
     }
 
-    void close(File* file) {
+    File* open_file(const char* path, const Mode mode) {
+        const char* fs_path;
+        const auto fs = get_fs(path, fs_path);
+        if (fs == nullptr) return nullptr;
+
+        return fs->ops->open_file(fs->handle, fs_path, mode);
+    }
+
+    void close_file(File* file) {
         file->ops->close(file->handle);
         memory::heap::free(file);
+    }
+
+    Directory* open_dir(const char* path) {
+        const char* fs_path;
+        const auto fs = get_fs(path, fs_path);
+        if (fs == nullptr) return nullptr;
+
+        return fs->ops->open_dir(fs->handle, fs_path);
+    }
+
+    void close_dir(Directory* dir) {
+        dir->ops->close(dir->handle);
+        memory::heap::free(dir);
     }
 } // namespace cosmos::vfs
