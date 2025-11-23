@@ -1,5 +1,6 @@
 #include "utils.hpp"
 
+#include "memory/heap.hpp"
 #include "serial.hpp"
 
 namespace cosmos::utils {
@@ -56,6 +57,15 @@ namespace cosmos::utils {
         return length;
     }
 
+    char* strdup(const char* str, const uint32_t str_length) {
+        const auto dup = static_cast<char*>(memory::heap::alloc(str_length + 1));
+
+        memcpy(dup, str, str_length);
+        dup[str_length] = '\0';
+
+        return dup;
+    }
+
     bool streq(const char* a, const char* b) {
         while (*a == *b) {
             if (*a == '\0') return true;
@@ -86,5 +96,24 @@ namespace cosmos::utils {
         }
 
         return true;
+    }
+
+    int32_t str_index_of(const char* str, const char ch) {
+        auto i = 0;
+
+        while (str[i] != '\0') {
+            if (str[i] == ch) return i;
+            i++;
+        }
+
+        return -1;
+    }
+
+    const char* str_trim_left(const char* str) {
+        while (*str == ' ') {
+            str++;
+        }
+
+        return str;
     }
 } // namespace cosmos::utils

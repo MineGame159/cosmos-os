@@ -10,11 +10,14 @@ namespace cosmos::utils {
     void memcpy(void* dst, const void* src, uint64_t size);
 
     uint32_t strlen(const char* str);
+    char* strdup(const char* str, uint32_t str_length);
 
     bool streq(const char* a, const char* b);
     bool streq(const char* a, uint32_t a_length, const char* b, uint32_t b_length);
 
     bool str_has_prefix(const char* str, const char* prefix);
+    int32_t str_index_of(const char* str, char ch);
+    const char* str_trim_left(const char* str);
 
     template <typename T>
     T min(T a, T b) {

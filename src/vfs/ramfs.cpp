@@ -83,6 +83,8 @@ namespace cosmos::vfs::ramfs {
 
     uint64_t file_read(void* handle, void* buffer, const uint64_t length) {
         const auto node = static_cast<Node*>(handle);
+
+        if (node->file.mode == Mode::Write) return 0;
         if (node->file.data == nullptr) return 0;
         if (node->file.cursor >= node->file.data_size) return 0;
 
@@ -99,6 +101,7 @@ namespace cosmos::vfs::ramfs {
 
     uint64_t file_write(void* handle, const void* buffer, const uint64_t length) {
         const auto node = static_cast<Node*>(handle);
+        if (node->file.mode == Mode::Read) return 0;
 
         if (node->file.cursor + length >= node->file.data_capacity) {
             const auto new_capacity = utils::max(node->file.data_capacity * 2, node->file.cursor + length);

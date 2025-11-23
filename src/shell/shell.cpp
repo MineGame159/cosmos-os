@@ -49,10 +49,13 @@ namespace cosmos::shell {
         for (;;) {
             print("> ");
 
-            char prompt[64];
-            read(prompt, 64);
+            char prompt[128];
+            read(prompt, 128);
 
-            const auto cmd_fn = get_command_fn(prompt);
+            const auto space = utils::str_index_of(prompt, ' ');
+            const auto name_length = space >= 0 ? space : utils::strlen(prompt);
+
+            const auto cmd_fn = get_command_fn(prompt, name_length);
 
             if (cmd_fn == nullptr) {
                 set_color(RED);
@@ -61,7 +64,8 @@ namespace cosmos::shell {
                 continue;
             }
 
-            cmd_fn();
+            const auto args = utils::str_trim_left(&prompt[name_length]);
+            cmd_fn(args);
         }
     }
 
@@ -171,12 +175,21 @@ namespace cosmos::shell {
             return true;
         }
 
-        if (event.key == Key::Space) {
+        switch (event.key) {
+        case Key::Space:
             ch = ' ';
             return true;
+        case Key::NumSlash:
+        case Key::Slash:
+            ch = '/';
+            return true;
+        case Key::NumPeriod:
+        case Key::Period:
+            ch = '.';
+            return true;
+        default:
+            return false;
         }
-
-        return false;
     }
 
     void read(char* buffer, const uint32_t length) {
