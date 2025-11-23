@@ -10,8 +10,21 @@ namespace cosmos::utils {
     void memcpy(void* dst, const void* src, uint64_t size);
 
     uint32_t strlen(const char* str);
+
     bool streq(const char* a, const char* b);
+    bool streq(const char* a, uint32_t a_length, const char* b, uint32_t b_length);
+
     bool str_has_prefix(const char* str, const char* prefix);
+
+    template <typename T>
+    T min(T a, T b) {
+        return a < b ? a : b;
+    }
+
+    template <typename T>
+    T max(T a, T b) {
+        return a > b ? a : b;
+    }
 
     template <typename T>
     T ceil_div(T a, T b) {

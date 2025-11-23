@@ -23,4 +23,32 @@ namespace cosmos::vfs {
 
         return length;
     }
+
+    bool PathEntryIt::next() {
+        const auto prev_entry = entry;
+        entry += length;
+
+        while (*entry == '/') {
+            entry++;
+        }
+
+        if (*entry == '\0') {
+            entry = prev_entry;
+            return false;
+        }
+
+        length = 0;
+        while (entry[length] != '/' && entry[length] != '\0') {
+            length++;
+        }
+
+        return true;
+    }
+
+    PathEntryIt iterate_path_entries(const char* path) {
+        return {
+            .entry = path,
+            .length = 0,
+        };
+    }
 } // namespace cosmos::vfs

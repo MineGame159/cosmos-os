@@ -23,6 +23,7 @@ executable(
         'src/devices/ps2kbd.cpp',
         'src/vfs/path.cpp',
         'src/vfs/vfs.cpp',
+        'src/vfs/ramfs.cpp',
         'src/shell/font.cpp',
         'src/shell/commands.cpp',
         'src/shell/shell.cpp',

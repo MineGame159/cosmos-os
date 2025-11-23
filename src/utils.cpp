@@ -67,6 +67,16 @@ namespace cosmos::utils {
         return false;
     }
 
+    bool streq(const char* a, uint32_t const a_length, const char* b, const uint32_t b_length) {
+        if (a_length != b_length) return false;
+
+        for (auto i = 0u; i < a_length; i++) {
+            if (a[i] != b[i]) return false;
+        }
+
+        return true;
+    }
+
     bool str_has_prefix(const char* str, const char* prefix) {
         while (*prefix != '\0') {
             if (*str != *prefix) return false;

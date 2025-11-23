@@ -10,15 +10,15 @@ namespace cosmos::vfs {
     };
 
     struct FileOps {
-        int64_t (*seek)(void* handle, SeekType type, int64_t offset);
-        int64_t (*read)(void* handle, void* buffer, uint64_t length);
-        int64_t (*write)(void* handle, const void* buffer, uint64_t length);
+        uint64_t (*seek)(void* handle, SeekType type, int64_t offset);
+        uint64_t (*read)(void* handle, void* buffer, uint64_t length);
+        uint64_t (*write)(void* handle, const void* buffer, uint64_t length);
         void (*close)(void* handle);
     };
 
     struct File {
         void* handle;
-        FileOps* ops;
+        const FileOps* ops;
     };
 
     enum class Mode : uint8_t {
@@ -33,12 +33,11 @@ namespace cosmos::vfs {
 
     struct Fs {
         void* handle;
-        FsOps* ops;
+        const FsOps* ops;
     };
 
     Fs* mount(const char* path);
 
     File* open(const char* path, Mode mode);
-
     void close(File* file);
 } // namespace cosmos::vfs

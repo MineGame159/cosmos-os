@@ -5,6 +5,7 @@
       <w>limine</w>
       <w>memcpy</w>
       <w>memmap</w>
+      <w>ramfs</w>
       <w>virt</w>
       <w>xorriso</w>
     </words>
