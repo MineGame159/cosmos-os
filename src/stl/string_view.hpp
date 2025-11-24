@@ -1,4 +1,20 @@
+// string_view.hpp
+// Byte-oriented string_view for the freestanding kernel.
+//
+// Notes:
+// - Minimal replacement for `std::string_view`: a non-owning, byte-oriented view into character data.
+// - Methods on this type return new views (immutable) rather than mutating the existing object.
+//   This differs from `std::string_view::remove_prefix`/`remove_suffix` (which mutate in-place).
+// - This type treats the underlying bytes as a sequence of ASCII/UTF-8 bytes;
+//   it does not decode multi-byte Unicode code points.
+//   Character-classification helpers come from `ctype.hpp` and assume ASCII semantics where appropriate.
+// - An empty view may have a nullptr `data()` pointer;
+//   callers should respect `size()` rather than relying on a null terminator.
+// - Intended for kernel/no-std environments where <string_view> is not available.
+
 #pragma once
+
+#include "ctype.hpp"
 #include <compare>
 #include <cstddef>
 
@@ -56,6 +72,46 @@ namespace cosmos::stl {
         [[nodiscard]] constexpr string_view remove_suffix(const size_t n) const noexcept {
             if (n >= size_) return {};
             return { data_, size_ - n };
+        }
+
+        [[nodiscard]] constexpr string_view substr(const size_t pos, const size_t n = SIZE_MAX) const noexcept {
+            if (pos >= size_) return {};
+            const size_t max_len = size_ - pos;
+            const size_t len = (n < max_len) ? n : max_len;
+            return { data_ + pos, len };
+        }
+
+        [[nodiscard]] constexpr string_view trim() const noexcept {
+            size_t start = 0;
+            size_t end = size_;
+
+            while (start < end && is_space(data_[start])) {
+                ++start;
+            }
+            while (end > start && is_space(data_[end - 1])) {
+                --end;
+            }
+            return { data_ + start, end - start };
+        }
+
+        [[nodiscard]] constexpr string_view ltrim() const noexcept {
+            size_t start = 0;
+            const size_t end = size_;
+
+            while (start < end && is_space(data_[start])) {
+                ++start;
+            }
+            return { data_ + start, end - start };
+        }
+
+        [[nodiscard]] constexpr string_view rtrim() const noexcept {
+            const size_t start = 0;
+            size_t end = size_;
+
+            while (end > start && is_space(data_[end - 1])) {
+                --end;
+            }
+            return { data_ + start, end - start };
         }
 
         // Operations
