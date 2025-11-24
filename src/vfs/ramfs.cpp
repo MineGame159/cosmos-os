@@ -193,6 +193,27 @@ namespace cosmos::vfs::ramfs {
         return node;
     }
 
+    // Helper to unlink a child from its parent without freeing the child.
+    static bool unlink_child_from_parent(Node* parent, const Node* child) {
+        if (parent == nullptr || child == nullptr) return false;
+
+        Node* cur = parent->dir.children_head;
+        Node* prev = nullptr;
+        while (cur != nullptr && cur != child) {
+            prev = cur;
+            cur = cur->next_child;
+        }
+
+        if (cur == nullptr) return false;
+
+        if (prev == nullptr) parent->dir.children_head = cur->next_child;
+        else prev->next_child = cur->next_child;
+
+        if (parent->dir.children_tail == cur) parent->dir.children_tail = prev;
+
+        return true;
+    }
+
     File* fs_open_file(void* handle, const char* path, const Mode mode) {
         Node* prev = nullptr;
         PathEntryIt it;
@@ -247,50 +268,28 @@ namespace cosmos::vfs::ramfs {
         // If requesting root, it's already present
         if (path[0] == '/' && path[1] == '\0') return true;
 
-        // Work on subpath without leading '/'
-        const char* p = path;
-        if (*p == '/') p++;
+        Node* parent = nullptr;
+        PathEntryIt it;
 
-        auto* node = static_cast<Node*>(handle);
+        // Find the node corresponding to the final path segment (if it exists)
+        const auto node = find_node(handle, path, parent, it);
 
-        // Walk segments, create the final segment only if its parent exists.
-        while (*p != '\0') {
-            const char* seg = p;
-            uint32_t seg_len = 0;
-            while (p[seg_len] != '/' && p[seg_len] != '\0') seg_len++;
+        // parent should point to the parent directory of the final entry
+        if (parent == nullptr) return false;
 
-            // If this is the final segment
-            if (p[seg_len] == '\0') {
-                // Check if already exists
-                const auto existing = node->find_child(seg, seg_len);
-                if (existing != nullptr) {
-                    // If it's a file, fail; if dir, succeed
-                    return !existing->is_file;
-                }
+        // If node exists, succeed only if it's a directory
+        if (node != nullptr) return !node->is_file;
 
-                // Create new directory node under current node
-                const auto new_node = alloc_node(seg, seg_len);
-                new_node->is_file = false;
-                new_node->dir.children_head = nullptr;
-                new_node->dir.children_tail = nullptr;
-                new_node->dir.opened = false;
-                new_node->dir.child = nullptr;
+        // Otherwise create a new directory node under parent using the final segment from 'it'
+        const auto new_node = alloc_node(it.entry, it.length);
+        new_node->is_file = false;
+        new_node->dir.children_head = nullptr;
+        new_node->dir.children_tail = nullptr;
+        new_node->dir.opened = false;
+        new_node->dir.child = nullptr;
 
-                node->add_child(new_node);
-                return true;
-            }
-
-            // Not final segment: must already exist and be a directory
-            const auto child = node->find_child(seg, seg_len);
-            if (child == nullptr || child->is_file) return false;
-
-            // Advance to next segment
-            node = child;
-            p += seg_len;
-            while (*p == '/') p++;
-        }
-
-        return false;
+        parent->add_child(new_node);
+        return true;
     }
 
     bool fs_remove(void* handle, const char* path) {
@@ -299,31 +298,12 @@ namespace cosmos::vfs::ramfs {
         // Don't allow removing root
         if (path[0] == '/' && path[1] == '\0') return false;
 
-        // Work on subpath without leading '/'
-        const char* p = path;
-        if (*p == '/') p++;
-
-        auto node = static_cast<Node*>(handle);
         Node* parent = nullptr;
+        PathEntryIt it;
 
-        // Walk to target node
-        while (*p != '\0') {
-            const char* seg = p;
-            uint32_t seg_len = 0;
-            while (p[seg_len] != '/' && p[seg_len] != '\0') seg_len++;
-
-            const auto child = node->find_child(seg, seg_len);
-            if (child == nullptr) return false;
-
-            parent = node;
-            node = child;
-
-            if (p[seg_len] == '\0') break;
-            p += seg_len;
-            while (*p == '/') p++;
-        }
-
-        if (parent == nullptr) return false; // target has no parent, shouldn't happen except root
+        // Find the node to remove and its parent
+        const auto node = find_node(handle, path, parent, it);
+        if (node == nullptr || parent == nullptr) return false;
 
         // Remove file
         if (node->is_file) {
@@ -333,22 +313,8 @@ namespace cosmos::vfs::ramfs {
                 memory::heap::free(node->file.data);
             }
 
-            // unlink from parent's child list
-            Node* cur = parent->dir.children_head;
-            Node* prev = nullptr;
-            while (cur != nullptr && cur != node) {
-                prev = cur;
-                cur = cur->next_child;
-            }
-
-            if (cur == nullptr) return false;
-
-            if (prev == nullptr) parent->dir.children_head = cur->next_child;
-            else prev->next_child = cur->next_child;
-
-            if (parent->dir.children_tail == cur) parent->dir.children_tail = prev;
-
-            memory::heap::free(cur);
+            if (!unlink_child_from_parent(parent, node)) return false;
+            memory::heap::free(node);
             return true;
         }
 
@@ -356,22 +322,8 @@ namespace cosmos::vfs::ramfs {
         if (node->dir.opened) return false;
         if (node->dir.children_head != nullptr) return false;
 
-        // unlink from parent
-        Node* cur = parent->dir.children_head;
-        Node* prev = nullptr;
-        while (cur != nullptr && cur != node) {
-            prev = cur;
-            cur = cur->next_child;
-        }
-
-        if (cur == nullptr) return false;
-
-        if (prev == nullptr) parent->dir.children_head = cur->next_child;
-        else prev->next_child = cur->next_child;
-
-        if (parent->dir.children_tail == cur) parent->dir.children_tail = prev;
-
-        memory::heap::free(cur);
+        if (!unlink_child_from_parent(parent, node)) return false;
+        memory::heap::free(node);
         return true;
     }
 
