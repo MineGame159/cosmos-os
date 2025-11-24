@@ -20,15 +20,15 @@
 #include <limits>
 
 namespace cosmos::stl {
-    struct string_view {
+    struct StringView {
       private:
         const char* data_ = nullptr;
         size_t size_ = 0;
 
       public:
-        constexpr string_view() noexcept = default;
-        constexpr string_view(const char* s, const size_t n) noexcept : data_(s), size_(n) {}
-        explicit constexpr string_view(const char* s) noexcept : data_(s), size_(s ? calculate_len(s) : 0) {}
+        constexpr StringView() noexcept = default;
+        constexpr StringView(const char* s, const size_t n) noexcept : data_(s), size_(n) {}
+        explicit constexpr StringView(const char* s) noexcept : data_(s), size_(s ? calculate_len(s) : 0) {}
 
         // Accessors
 
@@ -65,12 +65,12 @@ namespace cosmos::stl {
 
         // Modifiers (immutable)
 
-        [[nodiscard]] constexpr string_view remove_prefix(const size_t n) const noexcept {
+        [[nodiscard]] constexpr StringView remove_prefix(const size_t n) const noexcept {
             if (n >= size_) return {};
             return { data_ + n, size_ - n };
         }
 
-        [[nodiscard]] constexpr string_view remove_suffix(const size_t n) const noexcept {
+        [[nodiscard]] constexpr StringView remove_suffix(const size_t n) const noexcept {
             if (n >= size_) return {};
             return { data_, size_ - n };
         }
@@ -78,7 +78,7 @@ namespace cosmos::stl {
         // `substr` returns a substring starting at `pos` with length `n`.
         // If `pos` is out of range, an empty string_view is returned.
         // If `n` exceeds the available length, it is clamped to the maximum possible.
-        [[nodiscard]] constexpr string_view substr(const size_t pos, const size_t n = SIZE_MAX) const noexcept {
+        [[nodiscard]] constexpr StringView substr(const size_t pos, const size_t n = SIZE_MAX) const noexcept {
             if (pos >= size_) return {};
             const size_t max_len = size_ - pos;
             const size_t len = (n < max_len) ? n : max_len;
@@ -91,7 +91,7 @@ namespace cosmos::stl {
         // - If `stop` is not specified (default sentinel), it is treated as the end of the string.
         // - Indices are clamped to the valid range [0, size()] after normalization.
         // - If start >= stop after normalization and clamping, the result is empty.
-        [[nodiscard]] constexpr string_view slice(ptrdiff_t start = 0,
+        [[nodiscard]] constexpr StringView slice(ptrdiff_t start = 0,
                                                   ptrdiff_t stop = std::numeric_limits<ptrdiff_t>::max()) const noexcept {
             const auto sz = static_cast<ptrdiff_t>(size_);
 
@@ -116,7 +116,7 @@ namespace cosmos::stl {
             return { data_ + s, len };
         }
 
-        [[nodiscard]] constexpr string_view trim() const noexcept {
+        [[nodiscard]] constexpr StringView trim() const noexcept {
             size_t start = 0;
             size_t end = size_;
 
@@ -129,7 +129,7 @@ namespace cosmos::stl {
             return { data_ + start, end - start };
         }
 
-        [[nodiscard]] constexpr string_view ltrim() const noexcept {
+        [[nodiscard]] constexpr StringView ltrim() const noexcept {
             size_t start = 0;
             const size_t end = size_;
 
@@ -139,7 +139,7 @@ namespace cosmos::stl {
             return { data_ + start, end - start };
         }
 
-        [[nodiscard]] constexpr string_view rtrim() const noexcept {
+        [[nodiscard]] constexpr StringView rtrim() const noexcept {
             const size_t start = 0;
             size_t end = size_;
 
@@ -151,7 +151,7 @@ namespace cosmos::stl {
 
         // Operations
 
-        [[nodiscard]] constexpr bool starts_with(const string_view other) const noexcept {
+        [[nodiscard]] constexpr bool starts_with(const StringView other) const noexcept {
             const size_t n = other.size();
             if (n > size_) return false;
             for (size_t i = 0; i < n; ++i) {
@@ -161,10 +161,10 @@ namespace cosmos::stl {
         }
 
         [[nodiscard]] constexpr bool starts_with(const char* s) const noexcept {
-            return starts_with(string_view(s));
+            return starts_with(StringView(s));
         }
 
-        [[nodiscard]] constexpr bool ends_with(const string_view other) const noexcept {
+        [[nodiscard]] constexpr bool ends_with(const StringView other) const noexcept {
             const size_t n = other.size();
             if (n > size_) return false;
             const size_t off = size_ - n;
@@ -175,10 +175,10 @@ namespace cosmos::stl {
         }
 
         [[nodiscard]] constexpr bool ends_with(const char* s) const noexcept {
-            return ends_with(string_view(s));
+            return ends_with(StringView(s));
         }
 
-        [[nodiscard]] constexpr bool contains(const string_view other) const noexcept {
+        [[nodiscard]] constexpr bool contains(const StringView other) const noexcept {
             const size_t n = other.size();
             if (n == 0) return true;
             if (n > size_) return false;
@@ -197,12 +197,12 @@ namespace cosmos::stl {
         }
 
         [[nodiscard]] constexpr bool contains(const char* s) const noexcept {
-            return contains(string_view(s));
+            return contains(StringView(s));
         }
 
         // Comparison
 
-        [[nodiscard]] constexpr std::strong_ordering operator<=>(const string_view other) const noexcept {
+        [[nodiscard]] constexpr std::strong_ordering operator<=>(const StringView other) const noexcept {
             const size_t n = (size_ < other.size_) ? size_ : other.size_;
             for (size_t i = 0; i < n; ++i) {
                 if (data_[i] < other.data_[i]) return std::strong_ordering::less;
@@ -223,12 +223,12 @@ namespace cosmos::stl {
         }
     };
 
-    constexpr std::strong_ordering operator<=>(const string_view lhs, const char* rhs) noexcept {
-        return lhs <=> string_view(rhs);
+    constexpr std::strong_ordering operator<=>(const StringView lhs, const char* rhs) noexcept {
+        return lhs <=> StringView(rhs);
     }
 
-    constexpr std::strong_ordering operator<=>(const char* lhs, const string_view rhs) noexcept {
-        return string_view(lhs) <=> rhs;
+    constexpr std::strong_ordering operator<=>(const char* lhs, const StringView rhs) noexcept {
+        return StringView(lhs) <=> rhs;
     }
 
 } // namespace cosmos::stl
