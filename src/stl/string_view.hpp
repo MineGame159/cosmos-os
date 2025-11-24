@@ -17,6 +17,7 @@
 #include "ctype.hpp"
 #include <compare>
 #include <cstddef>
+#include <limits>
 
 namespace cosmos::stl {
     struct string_view {
@@ -74,11 +75,45 @@ namespace cosmos::stl {
             return { data_, size_ - n };
         }
 
+        // `substr` returns a substring starting at `pos` with length `n`.
+        // If `pos` is out of range, an empty string_view is returned.
+        // If `n` exceeds the available length, it is clamped to the maximum possible.
         [[nodiscard]] constexpr string_view substr(const size_t pos, const size_t n = SIZE_MAX) const noexcept {
             if (pos >= size_) return {};
             const size_t max_len = size_ - pos;
             const size_t len = (n < max_len) ? n : max_len;
             return { data_ + pos, len };
+        }
+
+        // `slice` returns a substring following Python semantics:
+        // - `start` and `stop` are signed indices; negative values count from the end.
+        // - `stop` is exclusive.
+        // - If `stop` is not specified (default sentinel), it is treated as the end of the string.
+        // - Indices are clamped to the valid range [0, size()] after normalization.
+        // - If start >= stop after normalization and clamping, the result is empty.
+        [[nodiscard]] constexpr string_view slice(ptrdiff_t start = 0,
+                                                  ptrdiff_t stop = std::numeric_limits<ptrdiff_t>::max()) const noexcept {
+            const auto sz = static_cast<ptrdiff_t>(size_);
+
+            // Normalize negative indices (count from end)
+            if (start < 0) start += sz;
+            if (stop < 0) stop += sz;
+
+            // If stop was omitted, treat as end
+            if (stop == std::numeric_limits<ptrdiff_t>::max()) stop = sz;
+
+            // Clamp to [0, sz]
+            if (start < 0) start = 0;
+            if (stop < 0) stop = 0;
+            if (start > sz) start = sz;
+            if (stop > sz) stop = sz;
+
+            // If empty or reversed range, return empty
+            if (start >= stop) return {};
+
+            const auto s = static_cast<size_t>(start);
+            const auto len = static_cast<size_t>(stop - start);
+            return { data_ + s, len };
         }
 
         [[nodiscard]] constexpr string_view trim() const noexcept {
