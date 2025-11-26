@@ -2,12 +2,11 @@
 
 #include "memory/heap.hpp"
 #include "serial.hpp"
+#include "stl/linked_list.hpp"
 #include "utils.hpp"
 
 namespace cosmos::scheduler {
     struct Process {
-        Process* next;
-
         ProcessFn fn;
         State state;
 
@@ -18,10 +17,8 @@ namespace cosmos::scheduler {
         uint64_t rsp;
     };
 
-    static Process* head;
-    static Process* tail;
-
-    static Process* current;
+    static stl::LinkedList<Process> processes = {};
+    static stl::LinkedList<Process>::Iterator current = {};
 
     constexpr uint64_t STACK_SIZE = 64ul * 1024ul;
 
@@ -74,31 +71,13 @@ namespace cosmos::scheduler {
         )");
     }
 
-    void init() {
-        head = nullptr;
-        tail = nullptr;
-        current = nullptr;
-    }
-
     ProcessId create_process(const ProcessFn fn) {
         const auto space = memory::virt::create();
         return create_process(fn, space);
     }
 
     ProcessId create_process(const ProcessFn fn, const memory::virt::Space space) {
-        const auto process = memory::heap::alloc<Process>();
-
-        if (head == nullptr) {
-            head = process;
-            tail = process;
-
-            process->next = process;
-        } else {
-            tail->next = process;
-            tail = process;
-
-            process->next = head;
-        }
+        const auto process = processes.push_back_alloc();
 
         process->fn = fn;
         process->state = State::Waiting;
@@ -124,11 +103,19 @@ namespace cosmos::scheduler {
     }
 
     ProcessId get_current_process() {
-        return reinterpret_cast<ProcessId>(current);
+        return reinterpret_cast<ProcessId>(*current);
     }
 
     State get_process_state(const ProcessId id) {
         return reinterpret_cast<Process*>(id)->state;
+    }
+
+    void move_next() {
+        ++current;
+
+        if (current == stl::LinkedList<Process>::end()) {
+            current = processes.begin();
+        }
     }
 
     void yield() {
@@ -136,32 +123,24 @@ namespace cosmos::scheduler {
             current->state = State::Waiting;
         }
 
-        const auto old_process = current;
+        const auto old_process = *current;
 
         asm volatile("cli" ::: "memory");
 
-        auto prev = current;
-        current = current->next;
+        move_next();
 
         for (;;) {
             if (current->state == State::Exited) {
-                if (current->next == current) {
+                if (processes.single_item()) {
                     serial::print("[scheduler] All processes exited, stopping\n");
                     utils::halt();
                 }
 
-                if (current != old_process) {
-                    const auto old = current;
-                    current = old->next;
-                    prev->next = current;
+                if (*current != old_process) {
+                    memory::virt::destroy(current->space);
+                    memory::heap::free(current->stack);
 
-                    if (head == old) head = old->next;
-                    if (tail == old) tail = prev;
-
-                    memory::virt::destroy(old->space);
-                    memory::heap::free(old->stack);
-                    memory::heap::free(old);
-
+                    processes.remove_free(current);
                     continue;
                 }
             }
@@ -170,17 +149,16 @@ namespace cosmos::scheduler {
                 break;
             }
 
-            if (current == old_process) {
+            if (*current == old_process) {
                 asm volatile("sti; hlt; cli" ::: "memory");
             }
 
-            prev = current;
-            current = current->next;
+            move_next();
         }
 
         current->state = State::Running;
 
-        if (old_process != current) {
+        if (old_process != *current) {
             memory::virt::switch_to(current->space);
             switch_to(&old_process->rsp, current->rsp);
         }
@@ -209,7 +187,7 @@ namespace cosmos::scheduler {
     void run() {
         asm volatile("cli" ::: "memory");
 
-        current = head;
+        current = processes.begin();
         uint64_t old;
 
         current->state = State::Running;

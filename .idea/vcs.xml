@@ -4,5 +4,6 @@
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/vendor/limine" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/vendor/nanoprintf" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/vendor/nanoprintf/tests/mpaland-conformance" vcs="Git" />
   </component>
 </project>

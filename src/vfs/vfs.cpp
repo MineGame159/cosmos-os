@@ -2,33 +2,22 @@
 
 #include "memory/heap.hpp"
 #include "path.hpp"
+#include "stl/linked_list.hpp"
 #include "utils.hpp"
 
 namespace cosmos::vfs {
     struct Mount {
-        Mount* next;
-
         stl::StringView path;
         Fs fs;
     };
 
-    static Mount* head = nullptr;
-    static Mount* tail = nullptr;
+    static stl::LinkedList<Mount> mounts = {};
 
     Fs* mount(const char* path) {
         const auto path_length = check_abs_path(path);
         if (path_length == 0) return nullptr;
 
-        const auto mount = static_cast<Mount*>(memory::heap::alloc(sizeof(Mount) + path_length));
-        mount->next = nullptr;
-
-        if (head == nullptr) {
-            head = mount;
-            tail = mount;
-        } else {
-            tail->next = mount;
-            tail = mount;
-        }
+        const auto mount = mounts.push_back_alloc(path_length);
 
         mount->path = stl::StringView(reinterpret_cast<char*>(mount + 1), path_length);
         utils::memcpy(const_cast<char*>(mount->path.data()), path, path_length);
@@ -42,12 +31,10 @@ namespace cosmos::vfs {
         const auto length = check_abs_path(path);
         if (length == 0) return nullptr;
 
-        auto mount = head;
-
         uint32_t longest_mount_length = 0;
         const Fs* fs = nullptr;
 
-        while (mount != nullptr) {
+        for (const auto mount : mounts) {
             if (mount->path.size() == 1 && mount->path[0] == '/' && 1 > longest_mount_length) {
                 longest_mount_length = 1;
                 fs = &mount->fs;
@@ -57,8 +44,6 @@ namespace cosmos::vfs {
                     fs = &mount->fs;
                 }
             }
-
-            mount = mount->next;
         }
 
         if (fs != nullptr) {

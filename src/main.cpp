@@ -39,7 +39,6 @@ void main() {
 
     memory::heap::init();
 
-    scheduler::init();
     scheduler::create_process(init, space);
     scheduler::run();
 
