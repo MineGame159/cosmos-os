@@ -26,7 +26,7 @@ namespace cosmos::stl {
     /// @brief Wrapper type representing an unexpected error.
     /// @tparam E The error type.
     template <class E>
-    struct Unexpected {
+    struct Err {
         static_assert(!std::is_reference_v<E>, "E must not be a reference type.");
         static_assert(!std::is_void_v<E>, "E must not be void.");
 
@@ -34,11 +34,11 @@ namespace cosmos::stl {
 
         /// @brief Construct from lvalue error.
         /// @param e The error to store.
-        constexpr explicit Unexpected(const E& e) : error_(e) {}
+        constexpr explicit Err(const E& e) : error_(e) {}
 
         /// @brief Construct from rvalue error.
         /// @param e The error to store.
-        constexpr explicit Unexpected(E&& e) : error_(static_cast<E&&>(e)) {}
+        constexpr explicit Err(E&& e) : error_(static_cast<E&&>(e)) {}
 
         /// @brief Access stored error (const lvalue).
         /// @return const reference to error.
@@ -61,7 +61,7 @@ namespace cosmos::stl {
     /// @tparam T The success type.
     /// @tparam E The error type.
     template <class T, class E>
-    class Expected {
+    class Result {
         static_assert(!std::is_reference_v<T>, "T must not be a reference type.");
         static_assert(!std::is_reference_v<E>, "E must not be a reference type.");
 
@@ -90,31 +90,31 @@ namespace cosmos::stl {
 
         /// @brief Construct from lvalue value.
         /// @param v The value to store.
-        constexpr explicit Expected(const T& v) : has_value_(true) {
+        constexpr Result(const T& v) : has_value_(true) { // NOLINT(*-explicit-constructor)
             new (&storage_.value) T(v);
         }
 
         /// @brief Construct from rvalue value.
         /// @param v The value to store.
-        constexpr explicit Expected(T&& v) : has_value_(true) {
+        constexpr Result(T&& v) : has_value_(true) { // NOLINT(*-explicit-constructor)
             new (&storage_.value) T(static_cast<T&&>(v));
         }
 
         /// @brief Construct from const Unexpected.
         /// @param u The unexpected error.
-        constexpr explicit Expected(const Unexpected<E>& u) : has_value_(false) {
+        constexpr Result(const Err<E>& u) : has_value_(false) { // NOLINT(*-explicit-constructor)
             new (&storage_.error) E(u.error());
         }
 
         /// @brief Construct from rvalue Unexpected.
         /// @param u The unexpected error.
-        constexpr explicit Expected(Unexpected<E>&& u) : has_value_(false) {
+        constexpr Result(Err<E>&& u) : has_value_(false) { // NOLINT(*-explicit-constructor)
             new (&storage_.error) E(static_cast<E&&>(u.error()));
         }
 
         /// @brief Copy constructor.
         /// @param o Other Expected object.
-        constexpr Expected(const Expected& o) : has_value_(o.has_value_) {
+        constexpr Result(const Result& o) : has_value_(o.has_value_) {
             if (has_value_)
                 new (&storage_.value) T(o.storage_.value);
             else
@@ -123,7 +123,7 @@ namespace cosmos::stl {
 
         /// @brief Move constructor.
         /// @param o Other Expected object to move from.
-        constexpr Expected(Expected&& o) noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_constructible_v<E>)
+        constexpr Result(Result&& o) noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_constructible_v<E>)
             : has_value_(o.has_value_) {
             if (has_value_)
                 new (&storage_.value) T(static_cast<T&&>(o.storage_.value));
@@ -132,7 +132,7 @@ namespace cosmos::stl {
         }
 
         /// @brief Destructor.
-        ~Expected() noexcept {
+        ~Result() noexcept {
             destroy();
         }
 
@@ -143,7 +143,7 @@ namespace cosmos::stl {
         /// @brief Copy assignment.
         /// @param o Other Expected object.
         /// @return *this
-        constexpr Expected& operator=(const Expected& o) {
+        constexpr Result& operator=(const Result& o) {
             if (this == &o) return *this;
             if (has_value_ && o.has_value_) {
                 storage_.value = o.storage_.value;
@@ -163,9 +163,9 @@ namespace cosmos::stl {
         /// @brief Move assignment.
         /// @param o Other Expected object.
         /// @return *this
-        constexpr Expected& operator=(Expected&& o) noexcept(std::is_nothrow_move_constructible_v<T> &&
-                                                             std::is_nothrow_move_constructible_v<E> &&
-                                                             std::is_nothrow_move_assignable_v<T> && std::is_nothrow_move_assignable_v<E>) {
+        constexpr Result& operator=(Result&& o) noexcept(std::is_nothrow_move_constructible_v<T> &&
+                                                         std::is_nothrow_move_constructible_v<E> && std::is_nothrow_move_assignable_v<T> &&
+                                                         std::is_nothrow_move_assignable_v<E>) {
             if (this == &o) return *this;
             if (has_value_ && o.has_value_) {
                 storage_.value = static_cast<T&&>(o.storage_.value);
@@ -284,7 +284,7 @@ namespace cosmos::stl {
     /// @brief Expected specialization for void success type.
     /// @tparam E The error type.
     template <class E>
-    class Expected<void, E> {
+    class Result<void, E> {
         static_assert(!std::is_reference_v<E>, "E must not be a reference type.");
 
         union Storage {
@@ -302,34 +302,34 @@ namespace cosmos::stl {
 
       public:
         /// @brief Default success constructor.
-        constexpr Expected() noexcept : has_value_(true) {}
+        constexpr Result() noexcept : has_value_(true) {}
 
         /// @brief Construct from const Unexpected.
-        constexpr explicit Expected(const Unexpected<E>& u) : has_value_(false) {
+        constexpr Result(const Err<E>& u) : has_value_(false) { // NOLINT(*-explicit-constructor)
             new (&storage_.error) E(u.error());
         }
 
         /// @brief Construct from rvalue Unexpected.
-        constexpr explicit Expected(Unexpected<E>&& u) : has_value_(false) {
+        constexpr Result(Err<E>&& u) : has_value_(false) { // NOLINT(*-explicit-constructor)
             new (&storage_.error) E(static_cast<E&&>(u.error()));
         }
 
         /// @brief Copy constructor.
-        constexpr Expected(const Expected& o) : has_value_(o.has_value_) {
+        constexpr Result(const Result& o) : has_value_(o.has_value_) {
             if (!has_value_) new (&storage_.error) E(o.storage_.error);
         }
 
         /// @brief Move constructor.
-        constexpr Expected(Expected&& o) noexcept(std::is_nothrow_move_constructible_v<E>) : has_value_(o.has_value_) {
+        constexpr Result(Result&& o) noexcept(std::is_nothrow_move_constructible_v<E>) : has_value_(o.has_value_) {
             if (!has_value_) new (&storage_.error) E(static_cast<E&&>(o.storage_.error));
         }
 
-        ~Expected() noexcept {
+        ~Result() noexcept {
             destroy();
         }
 
         /// @brief Copy assignment.
-        constexpr Expected& operator=(const Expected& o) {
+        constexpr Result& operator=(const Result& o) {
             if (this == &o) return *this;
             if (has_value_ && !o.has_value_) {
                 new (&storage_.error) E(o.storage_.error);
@@ -341,8 +341,7 @@ namespace cosmos::stl {
         }
 
         /// @brief Move assignment.
-        constexpr Expected& operator=(Expected&& o) noexcept(std::is_nothrow_move_constructible_v<E> &&
-                                                             std::is_nothrow_move_assignable_v<E>) {
+        constexpr Result& operator=(Result&& o) noexcept(std::is_nothrow_move_constructible_v<E> && std::is_nothrow_move_assignable_v<E>) {
             if (this == &o) return *this;
             if (has_value_ && !o.has_value_) {
                 new (&storage_.error) E(static_cast<E&&>(o.storage_.error));
