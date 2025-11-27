@@ -7,7 +7,7 @@
 namespace cosmos::vfs::devfs {
     struct Node {
         stl::StringView name;
-        Device device;
+        const FileOps* ops;
     };
 
     // DirOps
@@ -29,11 +29,29 @@ namespace cosmos::vfs::devfs {
 
     // FsOps
 
-    File* fs_open_file(Fs* fs, stl::StringView path, Mode mode) {
+    File* fs_open_file(Fs* fs, stl::StringView path, const Mode mode) {
+        const auto nodes = static_cast<stl::LinkedList<Node>*>(fs->handle);
+        path = path.substr(path[0] == '/' ? 1 : 0);
+
+        for (const auto node : *nodes) {
+            if (node->name == path) {
+                const auto file = memory::heap::alloc<File>();
+                file->fs = fs;
+                file->ops = node->ops;
+                file->handle = node;
+                file->mode = mode;
+                file->cursor = 0;
+
+                return file;
+            }
+        }
+
         return nullptr;
     }
 
-    void fs_close_file([[maybe_unused]] Fs* fs, [[maybe_unused]] File* file) {}
+    void fs_close_file([[maybe_unused]] Fs* fs, [[maybe_unused]] File* file) {
+        memory::heap::free(file);
+    }
 
     Directory* fs_open_dir(Fs* fs, const stl::StringView path) {
         if (path != "/") return nullptr;
@@ -83,7 +101,7 @@ namespace cosmos::vfs::devfs {
         fs->ops = &fs_ops;
     }
 
-    void register_device(void* handle, stl::StringView name, const Device device) {
+    void register_device(void* handle, stl::StringView name, const FileOps* ops) {
         if (name.contains("/")) return;
         name = name.trim();
 
@@ -93,6 +111,6 @@ namespace cosmos::vfs::devfs {
         node->name = stl::StringView(reinterpret_cast<char*>(node + 1), name.size());
         utils::memcpy(const_cast<char*>(node->name.data()), name.data(), name.size());
 
-        node->device = device;
+        node->ops = ops;
     }
 } // namespace cosmos::vfs::devfs
