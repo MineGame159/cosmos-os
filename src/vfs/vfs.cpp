@@ -13,19 +13,19 @@ namespace cosmos::vfs {
 
     static stl::LinkedList<Mount> mounts = {};
 
-    Fs* mount(const char* path) {
+    Fs* mount(const stl::StringView path) {
         const auto path_length = check_abs_path(path);
         if (path_length == 0) return nullptr;
 
         const auto mount = mounts.push_back_alloc(path_length);
 
         mount->path = stl::StringView(reinterpret_cast<char*>(mount + 1), path_length);
-        utils::memcpy(const_cast<char*>(mount->path.data()), path, path_length);
+        utils::memcpy(const_cast<char*>(mount->path.data()), path.data(), path_length);
 
         return &mount->fs;
     }
 
-    const Fs* get_fs(const stl::StringView path, const char*& fs_path) {
+    const Fs* get_fs(const stl::StringView& path, const char*& fs_path) {
         const auto length = check_abs_path(path);
         if (length == 0) return nullptr;
 
@@ -62,7 +62,7 @@ namespace cosmos::vfs {
         return nullptr;
     }
 
-    File* open_file(const char* path, const Mode mode) {
+    File* open_file(const stl::StringView path, const Mode mode) {
         const char* fs_path;
         const auto fs = get_fs(path, fs_path);
         if (fs == nullptr) return nullptr;
@@ -75,7 +75,7 @@ namespace cosmos::vfs {
         memory::heap::free(file);
     }
 
-    Directory* open_dir(const char* path) {
+    Directory* open_dir(const stl::StringView path) {
         const char* fs_path;
         const auto fs = get_fs(path, fs_path);
         if (fs == nullptr) return nullptr;
@@ -88,7 +88,7 @@ namespace cosmos::vfs {
         memory::heap::free(dir);
     }
 
-    bool make_dir(const char* path) {
+    bool make_dir(const stl::StringView path) {
         const char* fs_path;
         const auto fs = get_fs(path, fs_path);
         if (fs == nullptr) return false;
@@ -97,7 +97,7 @@ namespace cosmos::vfs {
         return fs->ops->make_dir(fs->handle, fs_path);
     }
 
-    bool remove(const char* path) {
+    bool remove(const stl::StringView path) {
         const char* fs_path;
         const auto fs = get_fs(path, fs_path);
         if (fs == nullptr) return false;

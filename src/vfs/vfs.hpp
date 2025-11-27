@@ -1,5 +1,7 @@
 #pragma once
 
+#include "stl/string_view.hpp"
+
 #include <cstdint>
 
 namespace cosmos::vfs {
@@ -22,7 +24,7 @@ namespace cosmos::vfs {
     };
 
     struct DirOps {
-        const char* (*read)(void* handle);
+        const stl::StringView& (*read)(void* handle);
         void (*close)(void* handle);
     };
 
@@ -38,10 +40,10 @@ namespace cosmos::vfs {
     };
 
     struct FsOps {
-        File* (*open_file)(void* handle, const char* path, Mode mode);
-        Directory* (*open_dir)(void* handle, const char* path);
-        bool (*make_dir)(void* handle, const char* path);
-        bool (*remove)(void* handle, const char* path);
+        File* (*open_file)(void* handle, stl::StringView path, Mode mode);
+        Directory* (*open_dir)(void* handle, stl::StringView path);
+        bool (*make_dir)(void* handle, stl::StringView path);
+        bool (*remove)(void* handle, stl::StringView path);
     };
 
     struct Fs {
@@ -49,19 +51,19 @@ namespace cosmos::vfs {
         const FsOps* ops;
     };
 
-    Fs* mount(const char* path);
+    Fs* mount(stl::StringView path);
 
-    File* open_file(const char* path, Mode mode);
+    File* open_file(stl::StringView path, Mode mode);
     void close_file(File* file);
 
-    Directory* open_dir(const char* path);
+    Directory* open_dir(stl::StringView path);
     void close_dir(Directory* dir);
 
-    // Create a directory at the given absolute path.
-    // Returns true on success.
-    bool make_dir(const char* path);
+    /// Create a directory at the given absolute path.
+    /// Returns true on success.
+    bool make_dir(stl::StringView path);
 
-    // Remove a file or an empty directory at the given absolute path.
-    // Returns true on success.
-    bool remove(const char* path);
+    /// Remove a file or an empty directory at the given absolute path.
+    /// Returns true on success.
+    bool remove(stl::StringView path);
 } // namespace cosmos::vfs

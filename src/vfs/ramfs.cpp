@@ -154,14 +154,16 @@ namespace cosmos::vfs::ramfs {
         .close = file_close,
     };
 
-    const char* dir_read(void* handle) {
+    constexpr stl::StringView EMPTY = "";
+
+    const stl::StringView& dir_read(void* handle) {
         const auto node = static_cast<Node*>(handle);
 
         if (node->dir.iterator != stl::LinkedList<Node>::end()) {
-            return (node->dir.iterator++)->name.data();
+            return (node->dir.iterator++)->name;
         }
 
-        return nullptr;
+        return EMPTY;
     }
 
     void dir_close(void* handle) {
@@ -174,7 +176,7 @@ namespace cosmos::vfs::ramfs {
         .close = dir_close,
     };
 
-    Node* find_node(void* handle, const stl::StringView path, Node*& prev, ViewPathEntryIt& it) {
+    Node* find_node(void* handle, const stl::StringView& path, Node*& prev, ViewPathEntryIt& it) {
         auto node = static_cast<Node*>(handle);
         it = iterate_view_path_entries(path);
 
@@ -191,7 +193,7 @@ namespace cosmos::vfs::ramfs {
         return node;
     }
 
-    File* fs_open_file(void* handle, const char* path, const Mode mode) {
+    File* fs_open_file(void* handle, const stl::StringView path, const Mode mode) {
         Node* prev = nullptr;
         ViewPathEntryIt it;
 
@@ -220,7 +222,7 @@ namespace cosmos::vfs::ramfs {
         return nullptr;
     }
 
-    Directory* fs_open_dir(void* handle, const char* path) {
+    Directory* fs_open_dir(void* handle, const stl::StringView path) {
         Node* prev = nullptr;
         ViewPathEntryIt it;
 
@@ -237,11 +239,11 @@ namespace cosmos::vfs::ramfs {
         return dir;
     }
 
-    bool fs_make_dir(void* handle, const char* path) {
-        if (path == nullptr) return false;
+    bool fs_make_dir(void* handle, const stl::StringView path) {
+        if (path.empty()) return false;
 
         // If requesting root, it's already present
-        if (path[0] == '/' && path[1] == '\0') return true;
+        if (path == "/") return false;
 
         Node* parent = nullptr;
         ViewPathEntryIt it;
@@ -264,11 +266,11 @@ namespace cosmos::vfs::ramfs {
         return true;
     }
 
-    bool fs_remove(void* handle, const char* path) {
-        if (path == nullptr) return false;
+    bool fs_remove(void* handle, const stl::StringView path) {
+        if (path.empty()) return false;
 
         // Don't allow removing root
-        if (path[0] == '/' && path[1] == '\0') return false;
+        if (path == "/") return false;
 
         Node* parent = nullptr;
         ViewPathEntryIt it;

@@ -116,10 +116,10 @@ namespace cosmos::shell {
             return;
         }
 
-        const char* child;
+        stl::StringView child;
 
-        while ((child = dir->ops->read(dir->handle)) != nullptr) {
-            print(child);
+        while (!(child = dir->ops->read(dir->handle)).empty()) {
+            print(child.data());
             print("\n");
         }
 
