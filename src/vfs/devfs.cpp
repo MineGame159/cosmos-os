@@ -12,58 +12,63 @@ namespace cosmos::vfs::devfs {
 
     // DirOps
 
-    stl::StringView dir_read(void* handle) {
-        const auto it = static_cast<stl::LinkedList<Node>::Iterator*>(handle);
+    stl::StringView dir_read(Directory* dir) {
+        const auto current = reinterpret_cast<stl::LinkedList<Node>::Node*>(dir->cursor);
 
-        if (*it != stl::LinkedList<Node>::end()) {
-            return ((*it)++)->name;
+        if (current != nullptr) {
+            dir->cursor = reinterpret_cast<uint64_t>(current->next);
+            return current->item.name;
         }
 
         return "";
     }
 
-    void dir_close(void* handle) {
-        const auto it = static_cast<stl::LinkedList<Node>::Iterator*>(handle);
-        memory::heap::free(it);
-    }
-
     static constexpr DirOps dir_ops = {
         .read = dir_read,
-        .close = dir_close,
     };
 
     // FsOps
 
-    File* fs_open_file(void* handle, stl::StringView path, Mode mode) {
+    File* fs_open_file(Fs* fs, stl::StringView path, Mode mode) {
         return nullptr;
     }
 
-    Directory* fs_open_dir(void* handle, const stl::StringView path) {
+    void fs_close_file([[maybe_unused]] Fs* fs, [[maybe_unused]] File* file) {}
+
+    Directory* fs_open_dir(Fs* fs, const stl::StringView path) {
         if (path != "/") return nullptr;
 
-        const auto nodes = static_cast<stl::LinkedList<Node>*>(handle);
+        const auto nodes = static_cast<stl::LinkedList<Node>*>(fs->handle);
 
         const auto it = memory::heap::alloc<stl::LinkedList<Node>::Iterator>();
         *it = nodes->begin();
 
         const auto dir = memory::heap::alloc<Directory>();
-        dir->handle = it;
+        dir->fs = fs;
         dir->ops = &dir_ops;
+        dir->handle = nullptr;
+        dir->cursor = reinterpret_cast<uint64_t>(nodes->head);
 
         return dir;
     }
 
-    bool fs_make_dir([[maybe_unused]] void* handle, [[maybe_unused]] stl::StringView path) {
+    void fs_close_dir([[maybe_unused]] Fs* fs, Directory* dir) {
+        memory::heap::free(dir);
+    }
+
+    bool fs_make_dir([[maybe_unused]] Fs* fs, [[maybe_unused]] stl::StringView path) {
         return false;
     }
 
-    bool fs_remove([[maybe_unused]] void* handle, [[maybe_unused]] stl::StringView path) {
+    bool fs_remove([[maybe_unused]] Fs* fs, [[maybe_unused]] stl::StringView path) {
         return false;
     }
 
     static constexpr FsOps fs_ops = {
         .open_file = fs_open_file,
+        .close_file = fs_close_file,
         .open_dir = fs_open_dir,
+        .close_dir = fs_close_dir,
         .make_dir = fs_make_dir,
         .remove = fs_remove,
     };

@@ -71,7 +71,7 @@ namespace cosmos::shell {
         const auto data = utils::str_trim_left(&args[path_length]);
         const auto data_length = utils::strlen(data);
 
-        file->ops->write(file->handle, data, data_length);
+        file->ops->write(file, data, data_length);
         vfs::close_file(file);
 
         memory::heap::free(resolved);
@@ -89,11 +89,11 @@ namespace cosmos::shell {
             return;
         }
 
-        const auto length = file->ops->seek(file->handle, vfs::SeekType::End, 0);
-        file->ops->seek(file->handle, vfs::SeekType::Start, 0);
+        const auto length = file->ops->seek(file, vfs::SeekType::End, 0);
+        file->ops->seek(file, vfs::SeekType::Start, 0);
 
         const auto str = static_cast<char*>(memory::heap::alloc(length + 1));
-        file->ops->read(file->handle, str, length);
+        file->ops->read(file, str, length);
         str[length] = '\0';
         vfs::close_file(file);
 
@@ -118,7 +118,7 @@ namespace cosmos::shell {
 
         stl::StringView child;
 
-        while (!(child = dir->ops->read(dir->handle)).empty()) {
+        while (!(child = dir->ops->read(dir)).empty()) {
             print(child.data());
             print("\n");
         }

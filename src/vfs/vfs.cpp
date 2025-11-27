@@ -25,12 +25,12 @@ namespace cosmos::vfs {
         return &mount->fs;
     }
 
-    const Fs* get_fs(const stl::StringView& path, const char*& fs_path) {
+    Fs* get_fs(const stl::StringView& path, const char*& fs_path) {
         const auto length = check_abs_path(path);
         if (length == 0) return nullptr;
 
         uint32_t longest_mount_length = 0;
-        const Fs* fs = nullptr;
+        Fs* fs = nullptr;
 
         for (const auto mount : mounts) {
             if (mount->path.size() == 1 && mount->path[0] == '/' && 1 > longest_mount_length) {
@@ -67,12 +67,11 @@ namespace cosmos::vfs {
         const auto fs = get_fs(path, fs_path);
         if (fs == nullptr) return nullptr;
 
-        return fs->ops->open_file(fs->handle, fs_path, mode);
+        return fs->ops->open_file(fs, fs_path, mode);
     }
 
     void close_file(File* file) {
-        file->ops->close(file->handle);
-        memory::heap::free(file);
+        file->fs->ops->close_file(file->fs, file);
     }
 
     Directory* open_dir(const stl::StringView path) {
@@ -80,12 +79,11 @@ namespace cosmos::vfs {
         const auto fs = get_fs(path, fs_path);
         if (fs == nullptr) return nullptr;
 
-        return fs->ops->open_dir(fs->handle, fs_path);
+        return fs->ops->open_dir(fs, fs_path);
     }
 
     void close_dir(Directory* dir) {
-        dir->ops->close(dir->handle);
-        memory::heap::free(dir);
+        dir->fs->ops->close_dir(dir->fs, dir);
     }
 
     bool make_dir(const stl::StringView path) {
@@ -94,7 +92,7 @@ namespace cosmos::vfs {
         if (fs == nullptr) return false;
 
         if (fs->ops->make_dir == nullptr) return false;
-        return fs->ops->make_dir(fs->handle, fs_path);
+        return fs->ops->make_dir(fs, fs_path);
     }
 
     bool remove(const stl::StringView path) {
@@ -103,6 +101,6 @@ namespace cosmos::vfs {
         if (fs == nullptr) return false;
 
         if (fs->ops->remove == nullptr) return false;
-        return fs->ops->remove(fs->handle, fs_path);
+        return fs->ops->remove(fs, fs_path);
     }
 } // namespace cosmos::vfs
