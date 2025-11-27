@@ -9,6 +9,7 @@
 #include "serial.hpp"
 #include "shell/shell.hpp"
 #include "utils.hpp"
+#include "vfs/devfs.hpp"
 #include "vfs/ramfs.hpp"
 
 using namespace cosmos;
@@ -16,7 +17,9 @@ using namespace cosmos;
 void init() {
     devices::pit::start();
     devices::ps2kbd::init();
+
     vfs::ramfs::create(vfs::mount("/"));
+    vfs::devfs::create(vfs::mount("/dev"));
 
     serial::printf("[cosmos] %s\n", "Initialized");
 

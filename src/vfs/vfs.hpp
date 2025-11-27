@@ -24,7 +24,7 @@ namespace cosmos::vfs {
     };
 
     struct DirOps {
-        const stl::StringView& (*read)(void* handle);
+        stl::StringView (*read)(void* handle);
         void (*close)(void* handle);
     };
 

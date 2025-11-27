@@ -77,6 +77,8 @@ namespace cosmos::vfs::ramfs {
         }
     };
 
+    // FileOps
+
     uint64_t file_seek(void* handle, const SeekType type, const int64_t offset) {
         const auto node = static_cast<Node*>(handle);
 
@@ -154,16 +156,16 @@ namespace cosmos::vfs::ramfs {
         .close = file_close,
     };
 
-    constexpr stl::StringView EMPTY = "";
+    // DirOps
 
-    const stl::StringView& dir_read(void* handle) {
+    stl::StringView dir_read(void* handle) {
         const auto node = static_cast<Node*>(handle);
 
         if (node->dir.iterator != stl::LinkedList<Node>::end()) {
             return (node->dir.iterator++)->name;
         }
 
-        return EMPTY;
+        return "";
     }
 
     void dir_close(void* handle) {
@@ -175,6 +177,8 @@ namespace cosmos::vfs::ramfs {
         .read = dir_read,
         .close = dir_close,
     };
+
+    // FsOps
 
     Node* find_node(void* handle, const stl::StringView& path, Node*& prev, ViewPathEntryIt& it) {
         auto node = static_cast<Node*>(handle);
@@ -303,6 +307,8 @@ namespace cosmos::vfs::ramfs {
         .make_dir = fs_make_dir,
         .remove = fs_remove,
     };
+
+    // Header
 
     void create(Fs* fs) {
         const auto root = static_cast<Node*>(memory::heap::alloc(sizeof(Node) + 2, alignof(Node)));

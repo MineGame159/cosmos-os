@@ -24,6 +24,7 @@ executable(
         'src/vfs/path.cpp',
         'src/vfs/vfs.cpp',
         'src/vfs/ramfs.cpp',
+        'src/vfs/devfs.cpp',
         'src/shell/font.cpp',
         'src/shell/commands.cpp',
         'src/shell/shell.cpp',
