@@ -106,10 +106,11 @@ namespace cosmos::vfs::devfs {
         name = name.trim();
 
         const auto nodes = static_cast<stl::LinkedList<Node>*>(handle);
-        const auto node = nodes->push_back_alloc(name.size());
+        const auto node = nodes->push_back_alloc(name.size() + 1);
 
         node->name = stl::StringView(reinterpret_cast<char*>(node + 1), name.size());
         utils::memcpy(const_cast<char*>(node->name.data()), name.data(), name.size());
+        const_cast<char*>(node->name.data())[name.size()] = '\0';
 
         node->ops = ops;
     }

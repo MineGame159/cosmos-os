@@ -1,3 +1,4 @@
+#include "devices/framebuffer.hpp"
 #include "devices/pit.hpp"
 #include "devices/ps2kbd.hpp"
 #include "interrupts/isr.hpp"
@@ -18,8 +19,13 @@ void init() {
     devices::pit::start();
     devices::ps2kbd::init();
 
-    vfs::ramfs::create(vfs::mount("/"));
-    vfs::devfs::create(vfs::mount("/dev"));
+    const auto ramfs = vfs::mount("/");
+    vfs::ramfs::create(ramfs);
+
+    const auto devfs = vfs::mount("/dev");
+    vfs::devfs::create(devfs);
+
+    devices::framebuffer::init(devfs->handle);
 
     serial::printf("[cosmos] %s\n", "Initialized");
 

@@ -5,18 +5,17 @@
 #include "devices/ps2kbd.hpp"
 #include "font.hpp"
 #include "limine.hpp"
-#include "memory/offsets.hpp"
+#include "memory/heap.hpp"
 #include "nanoprintf.h"
 #include "scheduler/scheduler.hpp"
 #include "utils.hpp"
-
-#include "memory/heap.hpp"
 #include "vfs/path.hpp"
+#include "vfs/vfs.hpp"
 
 #include <cstdint>
 
 namespace cosmos::shell {
-    static uint32_t* pixels;
+    static vfs::File* fbdev;
     static uint32_t width;
     static uint32_t height;
 
@@ -132,7 +131,7 @@ namespace cosmos::shell {
     void run() {
         const auto fb = limine::get_framebuffer();
 
-        pixels = reinterpret_cast<uint32_t*>(memory::virt::FRAMEBUFFER);
+        fbdev = vfs::open_file("/dev/framebuffer", vfs::Mode::ReadWrite);
         width = fb.width / FONT_WIDTH;
         height = fb.height / FONT_HEIGHT;
 
@@ -178,27 +177,60 @@ namespace cosmos::shell {
 
         const auto color = fg_color.pack();
 
-        for (auto x = 0u; x < FONT_WIDTH; x++) {
-            for (auto y = 0u; y < FONT_HEIGHT; y++) {
-                if (glyph.is_set(x, y)) {
-                    pixels[(base_y + y) * line_size + (base_x + x)] = color;
-                }
+        for (auto y = 0u; y < FONT_HEIGHT; y++) {
+            uint32_t row[FONT_WIDTH];
+
+            for (auto x = 0u; x < FONT_WIDTH; x++) {
+                row[x] = glyph.is_set(x, y) ? color : 0xFF000000;
             }
+
+            fbdev->ops->seek(fbdev, vfs::SeekType::Start, ((base_y + y) * line_size + base_x) * 4);
+            fbdev->ops->write(fbdev, row, FONT_WIDTH * 4);
+        }
+    }
+
+    void fill_cell(const uint32_t pixel) {
+        const auto base_x = cursor_x * FONT_WIDTH;
+        const auto base_y = cursor_y * FONT_HEIGHT;
+        const auto line_size = width * FONT_WIDTH;
+
+        uint32_t row[FONT_WIDTH];
+
+        for (auto x = 0u; x < FONT_WIDTH; x++) {
+            row[x] = pixel;
+        }
+
+        for (auto y = 0u; y < FONT_HEIGHT; y++) {
+            fbdev->ops->seek(fbdev, vfs::SeekType::Start, ((base_y + y) * line_size + base_x) * 4);
+            fbdev->ops->write(fbdev, row, FONT_WIDTH * 4);
         }
     }
 
     void new_line() {
-        cursor_x = 0;
         cursor_y++;
 
         if (cursor_y >= height) {
-            const auto row_size = FONT_HEIGHT * width * FONT_WIDTH;
+            const auto row_size = FONT_HEIGHT * width * FONT_WIDTH * 4;
+            const auto row = memory::heap::alloc_array<uint8_t>(row_size);
 
-            utils::memcpy(pixels, &pixels[row_size], (height - 1) * row_size * 4);
-            utils::memset(&pixels[(height - 1) * row_size], 0, row_size * 4);
+            for (auto y = 1u; y < height; y++) {
+                fbdev->ops->seek(fbdev, vfs::SeekType::Start, y * row_size);
+                fbdev->ops->read(fbdev, row, row_size);
 
+                fbdev->ops->seek(fbdev, vfs::SeekType::Start, (y - 1) * row_size);
+                fbdev->ops->write(fbdev, row, row_size);
+            }
+
+            memory::heap::free(row);
             cursor_y--;
+
+            for (auto x = 0u; x < width; x++) {
+                cursor_x = x;
+                fill_cell(0xFF000000);
+            }
         }
+
+        cursor_x = 0;
     }
 
     void set_color(const Color color) {
@@ -226,18 +258,6 @@ namespace cosmos::shell {
         static char buffer[256];
         npf_vsnprintf(buffer, 256, fmt, args);
         print(buffer);
-    }
-
-    void fill_cell(const uint32_t pixel) {
-        const auto base_x = cursor_x * FONT_WIDTH;
-        const auto base_y = cursor_y * FONT_HEIGHT;
-        const auto line_size = width * FONT_WIDTH;
-
-        for (auto x = 0u; x < FONT_WIDTH; x++) {
-            for (auto y = 0u; y < FONT_HEIGHT; y++) {
-                pixels[(base_y + y) * line_size + (base_x + x)] = pixel;
-            }
-        }
     }
 
     bool get_char_from_event(const devices::ps2kbd::Event event, char& ch) {

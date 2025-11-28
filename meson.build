@@ -21,6 +21,7 @@ executable(
         'src/scheduler/scheduler.cpp',
         'src/devices/pit.cpp',
         'src/devices/ps2kbd.cpp',
+        'src/devices/framebuffer.cpp',
         'src/vfs/path.cpp',
         'src/vfs/vfs.cpp',
         'src/vfs/ramfs.cpp',
