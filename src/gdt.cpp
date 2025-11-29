@@ -60,13 +60,13 @@ namespace cosmos::gdt {
         asm volatile("lgdt %0" : : "m"(descriptor));
 
         asm volatile(R"(
-            pushq $8 // Kernel - Code
+            pushq $8
             leaq 1f(%%rip), %%rax
             pushq %%rax
             lretq
 
         1:
-            movw $16, %%ax // Kernel - Data
+            movw $16, %%ax
             movw %%ax, %%ds
             movw %%ax, %%es
             movw %%ax, %%fs
