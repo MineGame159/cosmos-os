@@ -4,7 +4,6 @@
 #include "memory/offsets.hpp"
 #include "utils.hpp"
 #include "vfs/devfs.hpp"
-#include "vfs/vfs.hpp"
 
 namespace cosmos::devices::framebuffer {
     uint64_t fb_size() {
@@ -53,7 +52,7 @@ namespace cosmos::devices::framebuffer {
         .write = fb_write,
     };
 
-    void init(void* devfs_handle) {
-        vfs::devfs::register_device(devfs_handle, "framebuffer", &fb_ops);
+    void init(vfs::Node* node) {
+        vfs::devfs::register_device(node, "framebuffer", &fb_ops);
     }
 } // namespace cosmos::devices::framebuffer

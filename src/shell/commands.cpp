@@ -118,7 +118,7 @@ namespace cosmos::shell {
 
         stl::StringView child;
 
-        while (!(child = dir->ops->read(dir)).empty()) {
+        while (!(child = vfs::read_dir(dir)).empty()) {
             print(child.data());
             print("\n");
         }
@@ -170,7 +170,7 @@ namespace cosmos::shell {
             return;
         }
 
-        if (!vfs::make_dir(resolved)) {
+        if (!vfs::create_dir(resolved)) {
             print(RED, "Failed to create directory\n");
             memory::heap::free(resolved);
             return;

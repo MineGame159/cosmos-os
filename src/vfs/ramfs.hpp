@@ -1,7 +1,7 @@
 #pragma once
 
-#include "vfs.hpp"
+#include "types.hpp"
 
 namespace cosmos::vfs::ramfs {
-    void create(Fs* fs);
+    void create(Node* node);
 } // namespace cosmos::vfs::ramfs

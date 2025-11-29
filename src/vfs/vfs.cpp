@@ -1,106 +1,205 @@
 #include "vfs.hpp"
 
-#include "memory/heap.hpp"
 #include "path.hpp"
-#include "stl/linked_list.hpp"
 #include "utils.hpp"
 
 namespace cosmos::vfs {
-    struct Mount {
-        stl::StringView path;
-        Fs fs;
-    };
+    static Node* root = nullptr;
 
-    static stl::LinkedList<Mount> mounts = {};
+    Node* find_node(const stl::StringView& path, Node*& parent, ViewPathEntryIt& it) {
+        parent = nullptr;
+        auto node = root;
 
-    Fs* mount(const stl::StringView path) {
-        const auto path_length = check_abs_path(path);
-        if (path_length == 0) return nullptr;
+        it = iterate_view_path_entries(path);
 
-        const auto mount = mounts.push_back_alloc(path_length);
+        while (it.next()) {
+            auto found = false;
 
-        mount->path = stl::StringView(reinterpret_cast<char*>(mount + 1), path_length);
-        utils::memcpy(const_cast<char*>(mount->path.data()), path.data(), path_length);
+            if (node->type == NodeType::Directory) {
+                if (!node->populated) node->fs_ops->populate(node->fs_handle, node);
 
-        return &mount->fs;
-    }
+                for (const auto child : node->children) {
+                    if (child->name == it.entry) {
+                        parent = node;
+                        node = child;
 
-    Fs* get_fs(const stl::StringView& path, const char*& fs_path) {
-        const auto length = check_abs_path(path);
-        if (length == 0) return nullptr;
-
-        uint32_t longest_mount_length = 0;
-        Fs* fs = nullptr;
-
-        for (const auto mount : mounts) {
-            if (mount->path.size() == 1 && mount->path[0] == '/' && 1 > longest_mount_length) {
-                longest_mount_length = 1;
-                fs = &mount->fs;
-            } else if (path.starts_with(mount->path)) {
-                if ((path[mount->path.size()] == '/' || path.size() == mount->path.size()) && mount->path.size() > longest_mount_length) {
-                    longest_mount_length = mount->path.size();
-                    fs = &mount->fs;
+                        found = true;
+                        break;
+                    }
                 }
+            }
+
+            if (!found) {
+                parent = node;
+                return nullptr;
             }
         }
 
-        if (fs != nullptr) {
-            const char* subpath;
+        return node;
+    }
 
-            if (longest_mount_length == 1) {
-                subpath = &path[0];
-            } else if (path[longest_mount_length] == '\0') {
-                subpath = "/";
-            } else {
-                subpath = &path[longest_mount_length];
-            }
+    void init_mount_node(Node* node, Node* parent, const stl::StringView name) {
+        utils::memset(node, 0, sizeof(Node));
 
-            fs_path = subpath;
-            return fs;
+        utils::memcpy(node + 1, name.data(), name.size());
+        reinterpret_cast<char*>(node + 1)[name.size()] = '\0';
+
+        node->parent = parent;
+        node->type = NodeType::Directory;
+        node->name = stl::StringView(reinterpret_cast<char*>(node + 1), name.size());
+    }
+
+    Node* mount(const stl::StringView path) {
+        const auto length = check_abs_path(path);
+        if (length == 0) return nullptr;
+
+        if (path == "/") {
+            if (root != nullptr) return nullptr;
+
+            root = static_cast<Node*>(memory::heap::alloc(sizeof(Node) + length + 1, alignof(Node)));
+            init_mount_node(root, nullptr, path.substr(0, length));
+
+            return root;
+        }
+
+        Node* parent;
+        ViewPathEntryIt it;
+        auto node = find_node(path, parent, it);
+
+        if (node != nullptr) return nullptr;
+        if (parent->type != NodeType::Directory) return nullptr;
+        if (it.next()) return nullptr;
+
+        node = parent->children.push_back_alloc(it.entry.size() + 1);
+        init_mount_node(node, parent, it.entry);
+
+        return node;
+    }
+
+    File* open_file(stl::StringView path, const Mode mode) {
+        const auto length = check_abs_path(path);
+        if (length == 0) return nullptr;
+        path = path.substr(0, length);
+
+        Node* parent;
+        ViewPathEntryIt it;
+        auto node = find_node(path, parent, it);
+
+        if (node == nullptr && !it.next() && is_write(mode) && parent->type == NodeType::Directory) {
+            node = parent->fs_ops->create(parent->fs_handle, parent, NodeType::File, it.entry);
+        }
+
+        if (node != nullptr) {
+            if (node->type != NodeType::File) return nullptr;
+            if (node->open_write > 0) return nullptr;
+            if (is_write(mode) && node->open_read > 0) return nullptr;
+
+            const auto ops = node->fs_ops->open(node->fs_handle, node, mode);
+            if (ops == nullptr) return nullptr;
+
+            if (is_read(mode)) node->open_read++;
+            if (is_write(mode)) node->open_write++;
+
+            const auto file = memory::heap::alloc<File>();
+            file->ops = ops;
+            file->node = node;
+            file->mode = mode;
+            file->cursor = 0;
+
+            return file;
         }
 
         return nullptr;
     }
 
-    File* open_file(const stl::StringView path, const Mode mode) {
-        const char* fs_path;
-        const auto fs = get_fs(path, fs_path);
-        if (fs == nullptr) return nullptr;
-
-        return fs->ops->open_file(fs, fs_path, mode);
-    }
-
     void close_file(File* file) {
-        file->fs->ops->close_file(file->fs, file);
+        if (is_read(file->mode)) file->node->open_read--;
+        if (is_write(file->mode)) file->node->open_write--;
+
+        file->node->fs_ops->on_close(file->node->fs_handle, file);
+        memory::heap::free(file);
     }
 
-    Directory* open_dir(const stl::StringView path) {
-        const char* fs_path;
-        const auto fs = get_fs(path, fs_path);
-        if (fs == nullptr) return nullptr;
+    struct Dir {
+        Node* node;
+        stl::LinkedList<Node>::Iterator it;
+    };
 
-        return fs->ops->open_dir(fs, fs_path);
+    void* open_dir(stl::StringView path) {
+        const auto length = check_abs_path(path);
+        if (length == 0) return nullptr;
+        path = path.substr(0, length);
+
+        Node* parent;
+        ViewPathEntryIt it;
+        const auto node = find_node(path, parent, it);
+
+        if (node != nullptr && node->type == NodeType::Directory) {
+            if (!node->populated) node->fs_ops->populate(node->fs_handle, node);
+
+            node->open_read++;
+
+            const auto dir = memory::heap::alloc<Dir>();
+            dir->node = node;
+            dir->it = node->children.begin();
+
+            return dir;
+        }
+
+        return nullptr;
     }
 
-    void close_dir(Directory* dir) {
-        dir->fs->ops->close_dir(dir->fs, dir);
+    stl::StringView read_dir(void* dir) {
+        const auto d = static_cast<Dir*>(dir);
+
+        if (d->it != stl::LinkedList<Node>::end()) {
+            return (d->it++)->name;
+        }
+
+        return { "", 0 };
     }
 
-    bool make_dir(const stl::StringView path) {
-        const char* fs_path;
-        const auto fs = get_fs(path, fs_path);
-        if (fs == nullptr) return false;
+    void close_dir(void* dir) {
+        const auto d = static_cast<Dir*>(dir);
+        d->node->open_read--;
 
-        if (fs->ops->make_dir == nullptr) return false;
-        return fs->ops->make_dir(fs, fs_path);
+        memory::heap::free(d);
     }
 
-    bool remove(const stl::StringView path) {
-        const char* fs_path;
-        const auto fs = get_fs(path, fs_path);
-        if (fs == nullptr) return false;
+    bool create_dir(stl::StringView path) {
+        const auto length = check_abs_path(path);
+        if (length == 0) return false;
+        path = path.substr(0, length);
 
-        if (fs->ops->remove == nullptr) return false;
-        return fs->ops->remove(fs, fs_path);
+        Node* parent;
+        ViewPathEntryIt it;
+        auto node = find_node(path, parent, it);
+
+        if (node == nullptr && !it.next() && parent->type == NodeType::Directory) {
+            node = parent->fs_ops->create(parent->fs_handle, parent, NodeType::Directory, it.entry);
+            return node != nullptr;
+        }
+
+        return false;
+    }
+
+    bool remove(stl::StringView path) {
+        const auto length = check_abs_path(path);
+        if (length == 0) return false;
+        path = path.substr(0, length);
+
+        Node* parent;
+        ViewPathEntryIt it;
+        const auto node = find_node(path, parent, it);
+
+        if (node == nullptr) return false;
+        if (node->open_read > 0 || node->open_write > 0) return false;
+
+        if (node->type == NodeType::Directory) {
+            if (!node->populated) node->fs_ops->populate(node->fs_handle, node);
+            if (!node->children.empty()) return false;
+        }
+
+        return node->fs_ops->destroy(node->fs_handle, node);
     }
 } // namespace cosmos::vfs

@@ -14,6 +14,7 @@
 #include "utils.hpp"
 #include "vfs/devfs.hpp"
 #include "vfs/ramfs.hpp"
+#include "vfs/vfs.hpp"
 
 using namespace cosmos;
 
@@ -27,7 +28,7 @@ void init() {
     const auto devfs = vfs::mount("/dev");
     vfs::devfs::create(devfs);
 
-    devices::framebuffer::init(devfs->handle);
+    devices::framebuffer::init(devfs);
 
     serial::printf("[cosmos] %s\n", "Initialized");
 

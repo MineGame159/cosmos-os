@@ -1,5 +1,7 @@
 #pragma once
 
+#include "vfs/types.hpp"
+
 namespace cosmos::devices::framebuffer {
-    void init(void* devfs_handle);
+    void init(vfs::Node* node);
 } // namespace cosmos::devices::framebuffer
