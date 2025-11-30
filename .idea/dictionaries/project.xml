@@ -3,6 +3,7 @@
     <words>
       <w>devfs</w>
       <w>hhdm</w>
+      <w>kbdev</w>
       <w>limine</w>
       <w>memcpy</w>
       <w>memmap</w>

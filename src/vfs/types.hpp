@@ -54,10 +54,14 @@ namespace cosmos::vfs {
         End,
     };
 
+    constexpr uint64_t IOCTL_OK = 0;
+    constexpr uint64_t IOCTL_UNKNOWN = UINT64_MAX;
+
     struct FileOps {
         uint64_t (*seek)(File* file, SeekType type, int64_t offset);
         uint64_t (*read)(File* file, void* buffer, uint64_t length);
         uint64_t (*write)(File* file, const void* buffer, uint64_t length);
+        uint64_t (*ioctl)(File* file, uint64_t op, uint64_t arg);
     };
 
     enum class Mode : uint8_t {

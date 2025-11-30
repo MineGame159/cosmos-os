@@ -46,10 +46,15 @@ namespace cosmos::devices::framebuffer {
         return size;
     }
 
+    uint64_t fb_ioctl([[maybe_unused]] vfs::File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+        return vfs::IOCTL_UNKNOWN;
+    }
+
     static constexpr vfs::FileOps fb_ops = {
         .seek = fb_seek,
         .read = fb_read,
         .write = fb_write,
+        .ioctl = nullptr,
     };
 
     void init(vfs::Node* node) {

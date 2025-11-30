@@ -1,4 +1,5 @@
 #include "devices/framebuffer.hpp"
+#include "devices/keyboard.hpp"
 #include "devices/pit.hpp"
 #include "devices/ps2kbd.hpp"
 #include "gdt.hpp"
@@ -29,6 +30,7 @@ void init() {
     vfs::devfs::create(devfs);
 
     devices::framebuffer::init(devfs);
+    devices::keyboard::init(devfs);
 
     serial::printf("[cosmos] %s\n", "Initialized");
 

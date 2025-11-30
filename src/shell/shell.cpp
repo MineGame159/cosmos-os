@@ -1,8 +1,8 @@
 #include "shell.hpp"
 
 #include "commands.hpp"
+#include "devices/keyboard.hpp"
 #include "devices/pit.hpp"
-#include "devices/ps2kbd.hpp"
 #include "font.hpp"
 #include "limine.hpp"
 #include "memory/heap.hpp"
@@ -261,8 +261,8 @@ namespace cosmos::shell {
         print(buffer);
     }
 
-    bool get_char_from_event(const devices::ps2kbd::Event event, char& ch) {
-        using Key = devices::ps2kbd::Key;
+    bool get_char_from_event(const devices::keyboard::Event event, char& ch) {
+        using Key = devices::keyboard::Key;
 
         if (event.key == Key::CapsLock) {
             if ((!caps_lock && event.press) || (caps_lock && !event.press)) caps_lock = !caps_lock;
@@ -314,25 +314,28 @@ namespace cosmos::shell {
     }
 
     void read(char* buffer, const uint32_t length) {
-        devices::ps2kbd::reset_buffer();
+        using namespace devices::keyboard;
+        const auto kbdev = vfs::open_file("/dev/keyboard", vfs::Mode::Read);
+
+        kbdev->ops->ioctl(kbdev, IOCTL_RESET_BUFFER, 0);
         auto size = 0u;
 
         for (;;) {
             fill_cell(cursor_visible ? 0xFFFFFFFF : 0xFF000000);
 
-            devices::ps2kbd::Event event;
+            Event event;
 
-            if (!devices::ps2kbd::try_get_event(event)) {
-                devices::ps2kbd::resume_on_event();
+            if (kbdev->ops->read(kbdev, &event, sizeof(Event)) == 0) {
+                kbdev->ops->ioctl(kbdev, IOCTL_RESUME_ON_EVENT, 0);
                 scheduler::suspend();
                 continue;
             }
 
-            if ((event.key == devices::ps2kbd::Key::Enter || event.key == devices::ps2kbd::Key::NumEnter) && event.press) {
+            if ((event.key == Key::Enter || event.key == Key::NumEnter) && event.press) {
                 if (size > 0) break;
             }
 
-            if (event.key == devices::ps2kbd::Key::Backspace && event.press) {
+            if (event.key == Key::Backspace && event.press) {
                 if (size > 0) {
                     if (cursor_visible) fill_cell(0xFF000000);
 
@@ -355,6 +358,8 @@ namespace cosmos::shell {
                 print(ch);
             }
         }
+
+        vfs::close_file(kbdev);
 
         if (cursor_visible) fill_cell(0xFF000000);
 

@@ -69,10 +69,15 @@ namespace cosmos::vfs::ramfs {
         return length;
     }
 
+    uint64_t file_ioctl([[maybe_unused]] vfs::File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+        return IOCTL_UNKNOWN;
+    }
+
     static constexpr FileOps file_ops = {
         .seek = file_seek,
         .read = file_read,
         .write = file_write,
+        .ioctl = file_ioctl,
     };
 
     // FsOps

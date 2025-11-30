@@ -1,0 +1,149 @@
+#pragma once
+
+#include "vfs/types.hpp"
+
+namespace cosmos::devices::keyboard {
+    enum class Key : uint8_t {
+        Unknown,
+
+        A,
+        B,
+        C,
+        D,
+        E,
+        F,
+        G,
+        H,
+        I,
+        J,
+        K,
+        L,
+        M,
+        N,
+        O,
+        P,
+        Q,
+        R,
+        S,
+        T,
+        U,
+        V,
+        W,
+        X,
+        Y,
+        Z,
+
+        Key0,
+        Key1,
+        Key2,
+        Key3,
+        Key4,
+        Key5,
+        Key6,
+        Key7,
+        Key8,
+        Key9,
+
+        Comma,
+        Period,
+        Slash,
+        Backslash,
+        Semicolon,
+        Apostrophe,
+        GraveAccent,
+        Dash,
+        Equal,
+
+        Tab,
+        Space,
+        Backspace,
+        Enter,
+        Escape,
+
+        OpenBracket,
+        CloseBracket,
+
+        Num0,
+        Num1,
+        Num2,
+        Num3,
+        Num4,
+        Num5,
+        Num6,
+        Num7,
+        Num8,
+        Num9,
+
+        NumDash,
+        NumPlus,
+        NumPeriod,
+        NumEqual,
+        NumSlash,
+        NumStar,
+        NumEnter,
+
+        F1,
+        F2,
+        F3,
+        F4,
+        F5,
+        F6,
+        F7,
+        F8,
+        F9,
+        F10,
+        F11,
+        F12,
+        F13,
+        F14,
+        F15,
+        F16,
+        F17,
+        F18,
+        F19,
+        F20,
+        F21,
+        F22,
+        F23,
+        F24,
+
+        LeftShift,
+        RightShift,
+        LeftCtrl,
+        RightCtrl,
+        LeftAlt,
+        RightAlt,
+        LeftSuper,
+        RightSuper,
+
+        CapsLock,
+        NumLock,
+        ScrollLock,
+
+        Up,
+        Down,
+        Left,
+        Right,
+
+        PrintScreen,
+        Pause,
+        Home,
+        End,
+        Insert,
+        Delete,
+        PageUp,
+        PageDown,
+    };
+
+    struct Event {
+        Key key;
+        bool press;
+    };
+
+    constexpr uint64_t IOCTL_RESET_BUFFER = 1;
+    constexpr uint64_t IOCTL_RESUME_ON_EVENT = 2;
+
+    void init(vfs::Node* node);
+
+    void add_event(Event event);
+} // namespace cosmos::devices::keyboard
