@@ -140,8 +140,8 @@ namespace cosmos::devices::keyboard {
         bool press;
     };
 
-    constexpr uint64_t IOCTL_RESET_BUFFER = 1;
-    constexpr uint64_t IOCTL_RESUME_ON_EVENT = 2;
+    constexpr uint64_t IOCTL_CREATE_EVENT = 1;
+    constexpr uint64_t IOCTL_RESET_BUFFER = 2;
 
     void init(vfs::Node* node);
 

@@ -1,22 +1,11 @@
 #include "scheduler.hpp"
 
 #include "memory/heap.hpp"
-#include "serial.hpp"
+#include "private.hpp"
 #include "stl/linked_list.hpp"
 #include "utils.hpp"
 
 namespace cosmos::scheduler {
-    struct Process {
-        ProcessFn fn;
-        State state;
-
-        memory::virt::Space space;
-
-        void* stack;
-        void* stack_top;
-        uint64_t rsp;
-    };
-
     static stl::LinkedList<Process> processes = {};
     static stl::LinkedList<Process>::Iterator current = {};
 
@@ -144,7 +133,7 @@ namespace cosmos::scheduler {
                 }
             }
 
-            if (current->state == State::Waiting) {
+            if (current->state == State::Waiting || (current->state == State::SuspendedEvents && current->event_signalled)) {
                 break;
             }
 

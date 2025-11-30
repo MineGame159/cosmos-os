@@ -1,5 +1,8 @@
 #pragma once
 
+#include "scheduler/event.hpp"
+
+
 #include <cstdint>
 
 namespace cosmos::devices::pit {
@@ -7,5 +10,7 @@ namespace cosmos::devices::pit {
 
     void start();
 
-    void run_every_x_ms(uint64_t ms, HandlerFn fn, uint64_t data);
+    bool run_every_x_ms(uint64_t ms, HandlerFn fn, uint64_t data);
+
+    scheduler::EventHandle create_timer(uint64_t ms);
 } // namespace cosmos::devices::pit

@@ -11,6 +11,7 @@ namespace cosmos::scheduler {
         Waiting,
         Running,
         Suspended,
+        SuspendedEvents,
         Exited,
     };
 

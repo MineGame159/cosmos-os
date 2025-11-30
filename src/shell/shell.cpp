@@ -7,7 +7,6 @@
 #include "limine.hpp"
 #include "memory/heap.hpp"
 #include "nanoprintf.h"
-#include "scheduler/scheduler.hpp"
 #include "utils.hpp"
 #include "vfs/path.hpp"
 #include "vfs/vfs.hpp"
@@ -26,7 +25,7 @@ namespace cosmos::shell {
 
     static Color fg_color;
 
-    static scheduler::ProcessId process;
+    static scheduler::EventHandle cursor_blink_event;
 
     static bool caps_lock = false;
     static bool shift = false;
@@ -124,11 +123,6 @@ namespace cosmos::shell {
         print(WHITE, " > ");
     }
 
-    void blink_cursor([[maybe_unused]] uint64_t data) {
-        cursor_visible = !cursor_visible;
-        scheduler::resume(process);
-    }
-
     void run() {
         const auto fb = limine::get_framebuffer();
 
@@ -139,13 +133,11 @@ namespace cosmos::shell {
 
         fg_color = WHITE;
 
-        process = scheduler::get_current_process();
+        cursor_blink_event = devices::pit::create_timer(500);
 
         // initialize cwd to root
         cwd = const_cast<char*>("/");
         cwd_heap_allocated = false;
-
-        devices::pit::run_every_x_ms(500, blink_cursor, 0);
 
         for (;;) {
             print_prompt();
@@ -315,50 +307,64 @@ namespace cosmos::shell {
 
     void read(char* buffer, const uint32_t length) {
         using namespace devices::keyboard;
-        const auto kbdev = vfs::open_file("/dev/keyboard", vfs::Mode::Read);
 
+        const auto kbdev = vfs::open_file("/dev/keyboard", vfs::Mode::Read);
+        const auto kb_event = kbdev->ops->ioctl(kbdev, IOCTL_CREATE_EVENT, 0);
         kbdev->ops->ioctl(kbdev, IOCTL_RESET_BUFFER, 0);
+
         auto size = 0u;
 
         for (;;) {
             fill_cell(cursor_visible ? 0xFFFFFFFF : 0xFF000000);
 
-            Event event;
+            scheduler::EventHandle handles[] = { cursor_blink_event, kb_event };
+            const auto signalled = scheduler::wait_on_events(handles, 2, true);
 
-            if (kbdev->ops->read(kbdev, &event, sizeof(Event)) == 0) {
-                kbdev->ops->ioctl(kbdev, IOCTL_RESUME_ON_EVENT, 0);
-                scheduler::suspend();
-                continue;
+            if (signalled & 0b01) {
+                cursor_visible = !cursor_visible;
             }
 
-            if ((event.key == Key::Enter || event.key == Key::NumEnter) && event.press) {
-                if (size > 0) break;
-            }
+            if (signalled & 0b10) {
+                Event event;
+                auto exit = false;
 
-            if (event.key == Key::Backspace && event.press) {
-                if (size > 0) {
-                    if (cursor_visible) fill_cell(0xFF000000);
+                while (kbdev->ops->read(kbdev, &event, sizeof(Event)) != 0) {
+                    if ((event.key == Key::Enter || event.key == Key::NumEnter) && event.press) {
+                        if (size > 0) {
+                            exit = true;
+                            break;
+                        }
+                    }
 
-                    size--;
-                    row--;
+                    if (event.key == Key::Backspace && event.press) {
+                        if (size > 0) {
+                            if (cursor_visible) fill_cell(0xFF000000);
 
-                    fill_cell(0xFF000000);
+                            size--;
+                            row--;
+
+                            fill_cell(0xFF000000);
+                        }
+
+                        continue;
+                    }
+
+                    char ch[2];
+                    if (get_char_from_event(event, ch[0]) && size < length - 1) {
+                        buffer[size++] = ch[0];
+
+                        if (cursor_visible) fill_cell(0xFF000000);
+
+                        ch[1] = '\0';
+                        print(ch);
+                    }
                 }
 
-                continue;
-            }
-
-            char ch[2];
-            if (get_char_from_event(event, ch[0]) && size < length - 1) {
-                buffer[size++] = ch[0];
-
-                if (cursor_visible) fill_cell(0xFF000000);
-
-                ch[1] = '\0';
-                print(ch);
+                if (exit) break;
             }
         }
 
+        scheduler::destroy_event(kb_event);
         vfs::close_file(kbdev);
 
         if (cursor_visible) fill_cell(0xFF000000);
