@@ -53,38 +53,6 @@ namespace cosmos::vfs {
         };
     }
 
-    bool ViewPathEntryIt::next() {
-        const auto prev_entry = entry;
-
-        const auto index = reinterpret_cast<uintptr_t>(entry.data()) - reinterpret_cast<uintptr_t>(path.data());
-        entry = path.substr(index + entry.size());
-
-        while (entry[0] == '/') {
-            entry = entry.substr(1);
-        }
-
-        if (entry.empty()) {
-            entry = prev_entry;
-            return false;
-        }
-
-        auto i = 0u;
-
-        while (i < entry.size() && entry[i] != '/') {
-            i++;
-        }
-
-        entry = entry.substr(0, i);
-        return true;
-    }
-
-    ViewPathEntryIt iterate_view_path_entries(const stl::StringView path) {
-        return {
-            .path = path,
-            .entry = path.substr(0, 0),
-        };
-    }
-
     // Helper to append a segment to a vector-like char buffer
     static void append_segment(char* out, uint32_t& out_len, const char* seg, const uint32_t seg_len) {
         if (out_len > 1) {

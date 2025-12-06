@@ -37,11 +37,13 @@ namespace cosmos::vfs::devfs {
 
     // Header
 
-    void create(Node* node) {
+    bool init(Node* node, stl::StringView device_path) {
         node->fs_ops = &fs_ops;
         node->fs_handle = nullptr;
 
         node->populated = true;
+
+        return true;
     }
 
     void register_device(Node* node, stl::StringView name, const FileOps* ops, void* handle) {

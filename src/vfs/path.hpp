@@ -17,15 +17,6 @@ namespace cosmos::vfs {
 
     PathEntryIt iterate_path_entries(const char* path);
 
-    struct ViewPathEntryIt {
-        stl::StringView path;
-        stl::StringView entry;
-
-        bool next();
-    };
-
-    ViewPathEntryIt iterate_view_path_entries(stl::StringView path);
-
     // Resolve a possibly-relative path against a current working directory.
     // Returns a heap-allocated absolute path (caller must free with memory::heap::free).
     // On error (invalid path, attempts to escape root, etc.) returns nullptr.

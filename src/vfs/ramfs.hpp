@@ -3,5 +3,5 @@
 #include "types.hpp"
 
 namespace cosmos::vfs::ramfs {
-    void create(Node* node);
+    bool init(Node* node, stl::StringView device_path);
 } // namespace cosmos::vfs::ramfs

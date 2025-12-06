@@ -3,6 +3,11 @@
 #include "types.hpp"
 
 namespace cosmos::vfs {
+    using FsInitFn = bool (*)(Node* node, stl::StringView device_path);
+
+    void register_filesystem(stl::StringView name, FsInitFn init_fn);
+    FsInitFn get_filesystem(stl::StringView name);
+
     Node* mount(stl::StringView path);
 
     File* open_file(stl::StringView path, Mode mode);

@@ -4,13 +4,20 @@
 #include "utils.hpp"
 
 namespace cosmos::vfs {
+    struct Filesystem {
+        stl::StringView name;
+        FsInitFn init_fn;
+    };
+
+    static stl::LinkedList<Filesystem> filesystems = {};
+
     static Node* root = nullptr;
 
-    Node* find_node(const stl::StringView& path, Node*& parent, ViewPathEntryIt& it) {
+    Node* find_node(const stl::StringView& path, Node*& parent, stl::SplitIterator& it) {
         parent = nullptr;
         auto node = root;
 
-        it = iterate_view_path_entries(path);
+        it = stl::split(path, '/');
 
         while (it.next()) {
             auto found = false;
@@ -49,6 +56,24 @@ namespace cosmos::vfs {
         node->name = stl::StringView(reinterpret_cast<char*>(node + 1), name.size());
     }
 
+    void register_filesystem(const stl::StringView name, const FsInitFn init_fn) {
+        const auto filesystem = filesystems.push_back_alloc(name.size() + 1);
+
+        filesystem->name = stl::StringView(reinterpret_cast<const char*>(filesystem + 1), name.size());
+        filesystem->init_fn = init_fn;
+
+        utils::memcpy(const_cast<char*>(filesystem->name.data()), name.data(), name.size());
+        const_cast<char*>(filesystem->name.data())[name.size()] = '\0';
+    }
+
+    FsInitFn get_filesystem(const stl::StringView name) {
+        for (const auto filesystem : filesystems) {
+            if (filesystem->name == name) return filesystem->init_fn;
+        }
+
+        return nullptr;
+    }
+
     Node* mount(const stl::StringView path) {
         const auto length = check_abs_path(path);
         if (length == 0) return nullptr;
@@ -63,7 +88,7 @@ namespace cosmos::vfs {
         }
 
         Node* parent;
-        ViewPathEntryIt it;
+        stl::SplitIterator it;
         auto node = find_node(path, parent, it);
 
         if (node != nullptr) return nullptr;
@@ -82,7 +107,7 @@ namespace cosmos::vfs {
         path = path.substr(0, length);
 
         Node* parent;
-        ViewPathEntryIt it;
+        stl::SplitIterator it;
         auto node = find_node(path, parent, it);
 
         if (node == nullptr && !it.next() && is_write(mode) && parent->type == NodeType::Directory) {
@@ -131,7 +156,7 @@ namespace cosmos::vfs {
         path = path.substr(0, length);
 
         Node* parent;
-        ViewPathEntryIt it;
+        stl::SplitIterator it;
         const auto node = find_node(path, parent, it);
 
         if (node != nullptr && node->type == NodeType::Directory) {
@@ -172,7 +197,7 @@ namespace cosmos::vfs {
         path = path.substr(0, length);
 
         Node* parent;
-        ViewPathEntryIt it;
+        stl::SplitIterator it;
         auto node = find_node(path, parent, it);
 
         if (node == nullptr && !it.next() && parent->type == NodeType::Directory) {
@@ -189,7 +214,7 @@ namespace cosmos::vfs {
         path = path.substr(0, length);
 
         Node* parent;
-        ViewPathEntryIt it;
+        stl::SplitIterator it;
         const auto node = find_node(path, parent, it);
 
         if (node == nullptr) return false;

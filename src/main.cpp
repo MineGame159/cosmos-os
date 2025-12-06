@@ -26,11 +26,14 @@ void init() {
     devices::pit::start();
     if (!devices::ps2kbd::init()) utils::halt();
 
+    vfs::register_filesystem("ramfs", vfs::ramfs::init);
+    vfs::register_filesystem("devfs", vfs::devfs::init);
+
     const auto ramfs = vfs::mount("/");
-    vfs::ramfs::create(ramfs);
+    vfs::ramfs::init(ramfs, "");
 
     const auto devfs = vfs::mount("/dev");
-    vfs::devfs::create(devfs);
+    vfs::devfs::init(devfs, "");
 
     log::init_devfs(devfs);
     devices::framebuffer::init(devfs);

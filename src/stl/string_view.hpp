@@ -17,6 +17,7 @@
 #include "ctype.hpp"
 #include <compare>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 
 namespace cosmos::stl {
@@ -253,6 +254,42 @@ namespace cosmos::stl {
 
     constexpr std::strong_ordering operator<=>(const char* lhs, const StringView rhs) noexcept {
         return StringView(lhs) <=> rhs;
+    }
+
+    struct SplitIterator {
+        StringView str;
+        char ch;
+
+        StringView entry;
+
+        bool next() {
+            const auto prev_entry = entry;
+
+            const auto index = reinterpret_cast<uintptr_t>(entry.data()) - reinterpret_cast<uintptr_t>(str.data());
+            entry = str.substr(index + entry.size());
+
+            while (entry[0] == ch) {
+                entry = entry.substr(1);
+            }
+
+            if (entry.empty()) {
+                entry = prev_entry;
+                return false;
+            }
+
+            auto i = 0u;
+
+            while (i < entry.size() && entry[i] != ch) {
+                i++;
+            }
+
+            entry = entry.substr(0, i);
+            return true;
+        }
+    };
+
+    inline SplitIterator split(const StringView str, const char ch) {
+        return SplitIterator{ str, ch, str.substr(0, 0) };
     }
 
 } // namespace cosmos::stl

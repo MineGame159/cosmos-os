@@ -212,6 +212,59 @@ namespace cosmos::shell {
         rm_cmd(args);
     }
 
+    char* resolve_path_view(const stl::StringView path) {
+        const auto path_str = utils::strdup(path.data(), path.size());
+        const auto resolved = vfs::resolve_path(get_cwd(), path_str);
+        memory::heap::free(path_str);
+        return resolved;
+    }
+
+    void mount_cmd(const char* args) {
+        auto it = stl::split(args, ' ');
+
+        // Target path
+        if (!it.next()) {
+            print(RED, "Missing target path\n");
+            return;
+        }
+
+        const auto target_path = resolve_path_view(it.entry);
+
+        // Filesystem name
+        if (!it.next()) {
+            print(RED, "Missing filesystem name\n");
+            memory::heap::free(target_path);
+            return;
+        }
+
+        const auto filesystem_name = it.entry;
+
+        // Device path
+        auto device_path = const_cast<char*>("");
+
+        if (it.next()) {
+            device_path = resolve_path_view(it.entry);
+        }
+
+        // Mount
+        const auto init_fn = vfs::get_filesystem(filesystem_name);
+
+        if (init_fn == nullptr) {
+            print(RED, "Filesystem not found\n");
+        } else {
+            const auto node = vfs::mount(target_path);
+
+            if (!init_fn(node, device_path)) {
+                print(RED, "Failed to initialize filesystem\n");
+                vfs::remove(target_path);
+            }
+        }
+
+        // Free
+        if (!utils::streq(device_path, "")) memory::heap::free(device_path);
+        memory::heap::free(target_path);
+    }
+
     static constexpr Command commands[] = {
         { "meminfo", "Display memory information", meminfo },
         { "touch", "Creates and writes a file", touch },
@@ -222,6 +275,7 @@ namespace cosmos::shell {
         { "rm", "Remove file or empty directory", rm_cmd },
         { "rmdir", "Remove empty directory", rmdir_cmd },
         { "cd", "Change directory", cd },
+        { "mount", "Mounts a filesystem to a directory", mount_cmd },
         { "help", "Display all available commands", help },
     };
 

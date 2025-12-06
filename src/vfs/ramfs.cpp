@@ -146,10 +146,12 @@ namespace cosmos::vfs::ramfs {
 
     // Header
 
-    void create(Node* node) {
+    bool init(Node* node, stl::StringView device_path) {
         node->fs_ops = &fs_ops;
         node->fs_handle = nullptr;
 
         node->populated = true;
+
+        return true;
     }
 } // namespace cosmos::vfs::ramfs
