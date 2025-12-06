@@ -15,12 +15,12 @@ namespace cosmos::vfs {
     // Fs
 
     struct FsOps {
-        Node* (*create)(void* handle, Node* parent, NodeType type, stl::StringView name);
-        bool (*destroy)(void* handle, Node* node);
+        Node* (*create)(Node* parent, NodeType type, stl::StringView name);
+        bool (*destroy)(Node* node);
 
-        void (*populate)(void* handle, Node* node);
-        const FileOps* (*open)(void* handle, const Node* node, Mode mode);
-        void (*on_close)(void* handle, const File* file);
+        void (*populate)(Node* node);
+        const FileOps* (*open)(const Node* node, Mode mode);
+        void (*on_close)(const File* file);
     };
 
     // Node
@@ -33,6 +33,7 @@ namespace cosmos::vfs {
     struct Node {
         Node* parent;
 
+        bool mount_root;
         NodeType type;
         stl::StringView name;
 

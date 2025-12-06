@@ -17,6 +17,7 @@
 #include "shell/shell.hpp"
 #include "utils.hpp"
 #include "vfs/devfs.hpp"
+#include "vfs/iso9660.hpp"
 #include "vfs/ramfs.hpp"
 #include "vfs/vfs.hpp"
 
@@ -26,14 +27,12 @@ void init() {
     devices::pit::start();
     if (!devices::ps2kbd::init()) utils::halt();
 
-    vfs::register_filesystem("ramfs", vfs::ramfs::init);
-    vfs::register_filesystem("devfs", vfs::devfs::init);
+    vfs::ramfs::register_filesystem();
+    vfs::devfs::register_filesystem();
+    vfs::iso9660::register_filesystem();
 
-    const auto ramfs = vfs::mount("/");
-    vfs::ramfs::init(ramfs, "");
-
-    const auto devfs = vfs::mount("/dev");
-    vfs::devfs::init(devfs, "");
+    vfs::mount("/", "ramfs", "");
+    const auto devfs = vfs::mount("/dev", "devfs", "");
 
     log::init_devfs(devfs);
     devices::framebuffer::init(devfs);

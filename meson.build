@@ -33,6 +33,7 @@ executable(
         'src/vfs/vfs.cpp',
         'src/vfs/ramfs.cpp',
         'src/vfs/devfs.cpp',
+        'src/vfs/iso9660.cpp',
         'src/shell/font.cpp',
         'src/shell/commands.cpp',
         'src/shell/shell.cpp',

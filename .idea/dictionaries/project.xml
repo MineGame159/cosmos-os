@@ -10,7 +10,9 @@
       <w>memmap</w>
       <w>notsys</w>
       <w>ramfs</w>
+      <w>rrip</w>
       <w>strdup</w>
+      <w>susp</w>
       <w>virt</w>
       <w>xorriso</w>
     </words>

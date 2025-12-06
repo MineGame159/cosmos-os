@@ -220,6 +220,15 @@ namespace cosmos::stl {
             return contains(StringView(s));
         }
 
+        [[nodiscard]]
+        constexpr ptrdiff_t index_of(const char ch) const noexcept {
+            for (size_t i = 0; i < size_; i++) {
+                if (data_[i] == ch) return static_cast<::ptrdiff_t>(i);
+            }
+
+            return -1;
+        }
+
         // Comparison
 
         [[nodiscard]]

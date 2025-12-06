@@ -247,17 +247,10 @@ namespace cosmos::shell {
         }
 
         // Mount
-        const auto init_fn = vfs::get_filesystem(filesystem_name);
+        const auto node = vfs::mount(target_path, filesystem_name, device_path);
 
-        if (init_fn == nullptr) {
-            print(RED, "Filesystem not found\n");
-        } else {
-            const auto node = vfs::mount(target_path);
-
-            if (!init_fn(node, device_path)) {
-                print(RED, "Failed to initialize filesystem\n");
-                vfs::remove(target_path);
-            }
+        if (node == nullptr) {
+            print(RED, "Failed to mount filesystem\n");
         }
 
         // Free

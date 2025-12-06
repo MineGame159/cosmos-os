@@ -5,10 +5,10 @@
 namespace cosmos::vfs {
     using FsInitFn = bool (*)(Node* node, stl::StringView device_path);
 
-    void register_filesystem(stl::StringView name, FsInitFn init_fn);
-    FsInitFn get_filesystem(stl::StringView name);
+    void register_filesystem(stl::StringView name, std::size_t additional_root_node_size, FsInitFn init_fn);
 
-    Node* mount(stl::StringView path);
+    Node* mount(stl::StringView target_path, stl::StringView filesystem_name, stl::StringView device_path);
+    bool unmount(stl::StringView path);
 
     File* open_file(stl::StringView path, Mode mode);
     void close_file(File* file);

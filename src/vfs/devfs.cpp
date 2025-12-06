@@ -1,22 +1,24 @@
 #include "devfs.hpp"
 
 #include "utils.hpp"
+#include "vfs.hpp"
 
 namespace cosmos::vfs::devfs {
     // FsOps
 
-    Node* fs_create([[maybe_unused]] void* handle, [[maybe_unused]] Node* parent, [[maybe_unused]] NodeType type,
-                    [[maybe_unused]] stl::StringView name) {
+    Node* fs_create([[maybe_unused]] Node* parent, [[maybe_unused]] NodeType type, [[maybe_unused]] stl::StringView name) {
         return nullptr;
     }
 
-    bool fs_destroy([[maybe_unused]] void* handle, [[maybe_unused]] Node* node) {
+    bool fs_destroy([[maybe_unused]] Node* node) {
         return false;
     }
 
-    void fs_populate([[maybe_unused]] void* handle, [[maybe_unused]] Node* node) {}
+    void fs_populate(Node* node) {
+        node->populated = true;
+    }
 
-    const FileOps* fs_open([[maybe_unused]] void* handle, const Node* node, const Mode mode) {
+    const FileOps* fs_open(const Node* node, const Mode mode) {
         const auto ops = *reinterpret_cast<FileOps* const*>(node + 1);
 
         if (is_read(mode) && ops->read == nullptr) return nullptr;
@@ -25,7 +27,7 @@ namespace cosmos::vfs::devfs {
         return ops;
     }
 
-    void fs_on_close([[maybe_unused]] void* handle, [[maybe_unused]] const File* file) {}
+    void fs_on_close([[maybe_unused]] const File* file) {}
 
     static constexpr FsOps fs_ops = {
         .create = fs_create,
@@ -37,7 +39,7 @@ namespace cosmos::vfs::devfs {
 
     // Header
 
-    bool init(Node* node, stl::StringView device_path) {
+    bool init(Node* node, [[maybe_unused]] stl::StringView device_path) {
         node->fs_ops = &fs_ops;
         node->fs_handle = nullptr;
 
@@ -45,6 +47,11 @@ namespace cosmos::vfs::devfs {
 
         return true;
     }
+
+    void register_filesystem() {
+        vfs::register_filesystem("devfs", 0, init);
+    }
+
 
     void register_device(Node* node, stl::StringView name, const FileOps* ops, void* handle) {
         if (name.contains("/")) return;

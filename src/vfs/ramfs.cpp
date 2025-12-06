@@ -1,10 +1,11 @@
 #include "ramfs.hpp"
 
 #include "memory/heap.hpp"
-#include "path.hpp"
 #include "stl/linked_list.hpp"
 #include "stl/string_view.hpp"
+#include "types.hpp"
 #include "utils.hpp"
+#include "vfs.hpp"
 
 namespace cosmos::vfs::ramfs {
     struct FileInfo {
@@ -69,7 +70,7 @@ namespace cosmos::vfs::ramfs {
         return length;
     }
 
-    uint64_t file_ioctl([[maybe_unused]] vfs::File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+    uint64_t file_ioctl([[maybe_unused]] File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
         return IOCTL_UNKNOWN;
     }
 
@@ -82,7 +83,7 @@ namespace cosmos::vfs::ramfs {
 
     // FsOps
 
-    Node* fs_create([[maybe_unused]] void* handle, Node* parent, const NodeType type, const stl::StringView name) {
+    Node* fs_create(Node* parent, const NodeType type, const stl::StringView name) {
         Node* node;
 
         if (type == NodeType::Directory) {
@@ -99,6 +100,7 @@ namespace cosmos::vfs::ramfs {
         }
 
         node->parent = parent;
+        node->mount_root = false;
         node->type = type;
         node->fs_ops = parent->fs_ops;
         node->fs_handle = parent->fs_handle;
@@ -112,7 +114,7 @@ namespace cosmos::vfs::ramfs {
         return node;
     }
 
-    bool fs_destroy([[maybe_unused]] void* handle, Node* node) {
+    bool fs_destroy(Node* node) {
         for (auto it = node->parent->children.begin(); it != stl::LinkedList<Node>::end(); ++it) {
             if (*it == node) {
                 if (node->type == NodeType::File) {
@@ -128,13 +130,15 @@ namespace cosmos::vfs::ramfs {
         return false;
     }
 
-    void fs_populate([[maybe_unused]] void* handle, [[maybe_unused]] Node* node) {}
+    void fs_populate(Node* node) {
+        node->populated = true;
+    }
 
-    const FileOps* fs_open([[maybe_unused]] void* handle, const Node* node, Mode mode) {
+    const FileOps* fs_open(const Node* node, Mode mode) {
         return &file_ops;
     }
 
-    void fs_on_close([[maybe_unused]] void* handle, [[maybe_unused]] const File* file) {}
+    void fs_on_close([[maybe_unused]] const File* file) {}
 
     static constexpr FsOps fs_ops = {
         .create = fs_create,
@@ -146,12 +150,16 @@ namespace cosmos::vfs::ramfs {
 
     // Header
 
-    bool init(Node* node, stl::StringView device_path) {
+    bool init(Node* node, [[maybe_unused]] stl::StringView device_path) {
         node->fs_ops = &fs_ops;
         node->fs_handle = nullptr;
 
         node->populated = true;
 
         return true;
+    }
+
+    void register_filesystem() {
+        vfs::register_filesystem("ramfs", 0, init);
     }
 } // namespace cosmos::vfs::ramfs
