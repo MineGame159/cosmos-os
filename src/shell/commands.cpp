@@ -1,7 +1,6 @@
 #include "commands.hpp"
 
 #include "memory/heap.hpp"
-#include "memory/physical.hpp"
 #include "shell.hpp"
 #include "utils.hpp"
 #include "vfs/path.hpp"
@@ -32,18 +31,6 @@ namespace cosmos::shell {
         }
 
         return resolved;
-    }
-
-    void meminfo([[maybe_unused]] const char* args) {
-        print("Total");
-        print(GRAY, ": ");
-        printf("%d", static_cast<uint64_t>(memory::phys::get_total_pages()) * 4096 / 1024 / 1024);
-        print(GRAY, " mB\n");
-
-        print("Free");
-        print(GRAY, ": ");
-        printf("%d", static_cast<uint64_t>(memory::phys::get_free_pages()) * 4096 / 1024 / 1024);
-        print(GRAY, " mB\n");
     }
 
     void touch(const char* args) {
@@ -257,7 +244,6 @@ namespace cosmos::shell {
     }
 
     static constexpr Command commands[] = {
-        { "meminfo", "Display memory information", meminfo },
         { "touch", "Creates and writes a file", touch },
         { "cat", "Reads a file", cat },
         { "ls", "Lists children of a directory", ls },

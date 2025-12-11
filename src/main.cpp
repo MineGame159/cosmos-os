@@ -1,5 +1,6 @@
 #include "devices/atapio.hpp"
 #include "devices/framebuffer.hpp"
+#include "devices/info.hpp"
 #include "devices/keyboard.hpp"
 #include "devices/pit.hpp"
 #include "devices/ps2kbd.hpp"
@@ -38,6 +39,7 @@ void init() {
     devices::framebuffer::init(devfs);
     devices::keyboard::init(devfs);
     devices::atapio::init(devfs);
+    devices::info::init(devfs);
 
     INFO("Initialized");
 
