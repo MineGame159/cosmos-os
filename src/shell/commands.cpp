@@ -89,18 +89,16 @@ namespace cosmos::shell {
             return;
         }
 
-        const auto length = file->ops->seek(file, vfs::SeekType::End, 0);
-        file->ops->seek(file, vfs::SeekType::Start, 0);
+        char buffer[512];
+        uint64_t read;
 
-        const auto str = memory::heap::alloc_array<char>(length + 1);
-        file->ops->read(file, str, length);
-        str[length] = '\0';
+        while ((read = file->ops->read(file, buffer, 512)) != 0) {
+            print(buffer, read);
+        }
+
+        print("\n");
         vfs::close_file(file);
 
-        print(str, length);
-        print("\n");
-
-        memory::heap::free(str);
         memory::heap::free(resolved);
     }
 
