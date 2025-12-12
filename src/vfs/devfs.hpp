@@ -22,7 +22,9 @@ namespace cosmos::vfs::devfs {
     struct Sequence {
         const SequenceOps* ops;
 
-        int64_t index;
+        uint64_t index;
+        bool eof;
+
         bool show_overflow;
 
         char buffer[SEQUENCE_BUFFER_CAPACITY];

@@ -100,7 +100,7 @@ namespace cosmos::vfs::devfs {
         const auto seq = reinterpret_cast<Sequence*>(reinterpret_cast<uint8_t*>(file->node) + sizeof(Node) + sizeof(FileOps*));
 
         // Generate data into buffer
-        while (seq->remaining() >= 64 && seq->index >= 0) {
+        while (seq->remaining() >= 64 && !seq->eof) {
             const auto prev_size = seq->size;
             const auto prev_offset = seq->offset;
 

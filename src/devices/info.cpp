@@ -8,11 +8,12 @@ namespace cosmos::devices::info {
 
     void meminfo_reset(vfs::devfs::Sequence* seq) {
         seq->index = 0;
+        seq->eof = false;
     }
 
     void meminfo_next(vfs::devfs::Sequence* seq) {
         seq->index++;
-        if (seq->index >= 3) seq->index = -1;
+        if (seq->index >= 3) seq->eof = true;
     }
 
     void meminfo_show(vfs::devfs::Sequence* seq) {

@@ -30,6 +30,7 @@ executable(
         'src/devices/keyboard.cpp',
         'src/devices/atapio.cpp',
         'src/devices/info.cpp',
+        'src/devices/pci.cpp',
         'src/vfs/path.cpp',
         'src/vfs/vfs.cpp',
         'src/vfs/ramfs.cpp',
