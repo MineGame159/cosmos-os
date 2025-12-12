@@ -93,13 +93,20 @@ namespace cosmos::devices::pci {
         auto address = get_address(bus, device, function);
 
         T header;
-        const auto header_ptr = reinterpret_cast<uint32_t*>(&header);
+        const auto header_ptr = reinterpret_cast<uint8_t*>(&header);
 
         for (auto i = 0u; i < sizeof(T) / 4; i++) {
             address.offset(i * 4);
 
             utils::int_out(ADDRESS, address.raw);
-            header_ptr[i] = utils::int_in(DATA);
+
+            const auto data = utils::int_in(DATA);
+            const auto data_ptr = reinterpret_cast<const uint8_t*>(&data);
+
+            header_ptr[i * 4 + 0] = data_ptr[0];
+            header_ptr[i * 4 + 1] = data_ptr[1];
+            header_ptr[i * 4 + 2] = data_ptr[2];
+            header_ptr[i * 4 + 3] = data_ptr[3];
         }
 
         return header;
