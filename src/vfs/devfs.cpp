@@ -89,8 +89,7 @@ namespace cosmos::vfs::devfs {
         const auto seq = reinterpret_cast<Sequence*>(reinterpret_cast<uint8_t*>(file->node) + sizeof(Node) + sizeof(FileOps*));
         seq->ops->reset(seq);
 
-        seq->size = 0;
-        seq->offset = 0;
+        seq->buffer.reset();
 
         file->cursor = 0;
         return 0;
@@ -100,16 +99,16 @@ namespace cosmos::vfs::devfs {
         const auto seq = reinterpret_cast<Sequence*>(reinterpret_cast<uint8_t*>(file->node) + sizeof(Node) + sizeof(FileOps*));
 
         // Generate data into buffer
-        while (seq->remaining() >= 64 && !seq->eof) {
-            const auto prev_size = seq->size;
-            const auto prev_offset = seq->offset;
+        while (seq->buffer.remaining() >= 64 && !seq->eof) {
+            const auto prev_write_index = seq->buffer.write_index;
+            const auto prev_read_index = seq->buffer.read_index;
 
             seq->show_overflow = false;
             seq->ops->show(seq);
 
             if (seq->show_overflow) {
-                seq->size = prev_size;
-                seq->offset = prev_offset;
+                seq->buffer.write_index = prev_write_index;
+                seq->buffer.read_index = prev_read_index;
                 break;
             }
 
@@ -117,18 +116,12 @@ namespace cosmos::vfs::devfs {
         }
 
         // Read data from buffer
-        const auto read = utils::min(seq->size - seq->offset, length);
+        auto read = utils::min(seq->buffer.size(), length);
         if (read == 0) return 0;
 
-        utils::memcpy(buffer, &seq->buffer[seq->offset], read);
-        seq->offset += read;
-
-        // Move rest of the buffer to the start
-        utils::memcpy(seq->buffer, &seq->buffer[seq->offset], seq->size - seq->offset);
-        seq->size -= read;
-        seq->offset = 0;
-
+        read = seq->buffer.try_get(static_cast<char*>(buffer), read);
         file->cursor += read;
+
         return read;
     }
 
@@ -153,13 +146,9 @@ namespace cosmos::vfs::devfs {
         const auto length = static_cast<uint64_t>(npf_vsnprintf(fmt_buffer, 128, fmt, args));
         va_end(args);
 
-        if (length > remaining()) {
+        if (!buffer.add(fmt_buffer, length)) {
             show_overflow = true;
-            return;
         }
-
-        utils::memcpy(&buffer[size], fmt_buffer, length);
-        size += length;
     }
 
     void register_sequence_device(Node* node, stl::StringView name, const SequenceOps* ops) {
@@ -172,8 +161,7 @@ namespace cosmos::vfs::devfs {
         seq->ops = ops;
         seq->index = 0;
         seq->show_overflow = false;
-        seq->size = 0;
-        seq->offset = 0;
+        seq->buffer = {};
 
         seq->ops->reset(seq);
     }

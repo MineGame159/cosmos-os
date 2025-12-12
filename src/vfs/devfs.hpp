@@ -1,5 +1,6 @@
 #pragma once
 
+#include "stl/ring_buffer.hpp"
 #include "types.hpp"
 
 namespace cosmos::vfs::devfs {
@@ -17,8 +18,6 @@ namespace cosmos::vfs::devfs {
         void (*show)(Sequence* seq);
     };
 
-    constexpr uint32_t SEQUENCE_BUFFER_CAPACITY = 512;
-
     struct Sequence {
         const SequenceOps* ops;
 
@@ -27,14 +26,7 @@ namespace cosmos::vfs::devfs {
 
         bool show_overflow;
 
-        char buffer[SEQUENCE_BUFFER_CAPACITY];
-        uint64_t size;
-        uint64_t offset;
-
-        [[nodiscard]]
-        uint64_t remaining() const {
-            return SEQUENCE_BUFFER_CAPACITY - size;
-        }
+        stl::RingBuffer<char, 512> buffer;
 
         void printf(const char* fmt, ...);
     };

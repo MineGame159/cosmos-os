@@ -1,13 +1,11 @@
 #include "keyboard.hpp"
 
 #include "scheduler/event.hpp"
+#include "stl/ring_buffer.hpp"
 #include "vfs/devfs.hpp"
 
 namespace cosmos::devices::keyboard {
-    constexpr uint32_t BUFFER_SIZE = 32;
-    static Event event_buffer[BUFFER_SIZE];
-    static uint32_t event_buffer_write_index = 0;
-    static uint32_t event_buffer_read_index = 0;
+    static stl::RingBuffer<Event, 32> events = {};
 
     constexpr uint32_t EVENT_HANDLE_CAPACITY = 8;
     static scheduler::EventHandle event_handles[EVENT_HANDLE_CAPACITY];
@@ -22,10 +20,9 @@ namespace cosmos::devices::keyboard {
 
         asm volatile("cli" ::: "memory");
 
-        if (event_buffer_read_index != event_buffer_write_index) {
-            *static_cast<Event*>(buffer) = event_buffer[event_buffer_read_index];
-
-            event_buffer_read_index = (event_buffer_read_index + 1) % BUFFER_SIZE;
+        Event event;
+        if (events.try_get(event)) {
+            *static_cast<Event*>(buffer) = event;
 
             asm volatile("sti" ::: "memory");
             return sizeof(Event);
@@ -83,8 +80,7 @@ namespace cosmos::devices::keyboard {
         case IOCTL_RESET_BUFFER: {
             asm volatile("cli" ::: "memory");
 
-            event_buffer_write_index = 0;
-            event_buffer_read_index = 0;
+            events.reset();
 
             asm volatile("sti" ::: "memory");
             return vfs::IOCTL_OK;
@@ -107,12 +103,7 @@ namespace cosmos::devices::keyboard {
     }
 
     void add_event(const Event event) {
-        const auto next_write_index = (event_buffer_write_index + 1) % BUFFER_SIZE;
-
-        if (next_write_index != event_buffer_read_index) {
-            event_buffer[event_buffer_write_index] = event;
-            event_buffer_write_index = next_write_index;
-
+        if (events.add(event)) {
             for (auto i = 0u; i < event_handle_count; i++) {
                 if (event_handles[i] != 0) scheduler::signal_event(event_handles[i]);
             }
