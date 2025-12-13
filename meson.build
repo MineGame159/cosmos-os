@@ -22,6 +22,7 @@ executable(
         'src/memory/physical.cpp',
         'src/memory/virtual.cpp',
         'src/memory/heap.cpp',
+        'src/elf/parser.cpp',
         'src/scheduler/event.cpp',
         'src/scheduler/scheduler.cpp',
         'src/devices/pit.cpp',
