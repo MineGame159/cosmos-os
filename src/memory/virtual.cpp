@@ -57,13 +57,14 @@ namespace cosmos::memory::virt {
 
     // Table entry
 
-    constexpr uint64_t FLAG_PRESENT = 1 << 0;
-    constexpr uint64_t FLAG_WRITABLE = 1 << 1;
-    constexpr uint64_t FLAG_USER = 1 << 2;
-    constexpr uint64_t FLAG_WRITE_THROUGH = 1 << 3;
-    constexpr uint64_t FLAG_CACHE_DISABLE = 1 << 4;
-    constexpr uint64_t FLAG_ACCESSED = 1 << 5;
-    constexpr uint64_t FLAG_DIRECT = 1 << 7;
+    constexpr uint64_t FLAG_PRESENT = 1ul << 0;
+    constexpr uint64_t FLAG_WRITABLE = 1ul << 1;
+    constexpr uint64_t FLAG_USER = 1ul << 2;
+    constexpr uint64_t FLAG_WRITE_THROUGH = 1ul << 3;
+    constexpr uint64_t FLAG_CACHE_DISABLE = 1ul << 4;
+    constexpr uint64_t FLAG_ACCESSED = 1ul << 5;
+    constexpr uint64_t FLAG_DIRECT = 1ul << 7;
+    constexpr uint64_t FLAG_NO_EXECUTE = 1ul << 63;
 
     constexpr uint64_t ADDRESS_MASK /*************/ = 0b00000000'00000111'11111111'11111111'11111111'11111111'11110000'00000000;
     constexpr uint64_t DIRECT_PD_ADDRESS_MASK /***/ = 0b00000000'00000111'11111111'11111111'11111111'11100000'00000000'00000000;
@@ -97,6 +98,10 @@ namespace cosmos::memory::virt {
         return (entry & FLAG_DIRECT) == FLAG_DIRECT;
     }
 
+    bool entry_is_no_execute(const uint64_t entry) {
+        return (entry & FLAG_NO_EXECUTE) == FLAG_NO_EXECUTE;
+    }
+
     // Space
 
     static bool first_create = true;
@@ -118,7 +123,7 @@ namespace cosmos::memory::virt {
 
             if (type == limine::MemoryType::ExecutableAndModules) {
                 constexpr auto virt = KERNEL / 4096ul;
-                return map_pages(space, virt, first_page, page_count, false);
+                return map_pages(space, virt, first_page, page_count, Flags::Write | Flags::Execute);
             }
         }
 
@@ -132,7 +137,7 @@ namespace cosmos::memory::virt {
 
             if (type == limine::MemoryType::Framebuffer) {
                 constexpr auto virt = FRAMEBUFFER / 4096ul;
-                return map_pages(space, virt, first_page, page_count, true);
+                return map_pages(space, virt, first_page, page_count, Flags::Write | Flags::Uncached);
             }
         }
 
@@ -147,7 +152,7 @@ namespace cosmos::memory::virt {
             const auto [type, first_page, page_count] = limine::get_memory_range(i);
 
             if (limine::memory_type_ram(type)) {
-                if (!map_pages(space, virt + first_page, first_page, page_count, false)) return false;
+                if (!map_pages(space, virt + first_page, first_page, page_count, Flags::Write)) return false;
             }
         }
 
@@ -270,12 +275,16 @@ namespace cosmos::memory::virt {
         return get_ptr_from_phys<uint64_t>(entry & ADDRESS_MASK);
     }
 
-    bool map_pages(const Space space, uint64_t virt, uint64_t phys, uint64_t count, const bool cache_disabled) {
+    bool map_pages(const Space space, uint64_t virt, uint64_t phys, uint64_t count, const Flags flags) {
+        // Get entry flags
+        auto entry_flags = FLAG_PRESENT;
+
+        if (flags / Flags::Write) entry_flags |= FLAG_WRITABLE;
+        if (!(flags / Flags::Execute)) entry_flags |= FLAG_NO_EXECUTE;
+        if (flags / Flags::Uncached) entry_flags |= FLAG_CACHE_DISABLE | FLAG_WRITE_THROUGH;
+
+        // Map
         const auto pml4_table = get_ptr_from_phys<uint64_t>(space);
-
-        auto flags = FLAG_PRESENT | FLAG_WRITABLE;
-        if (cache_disabled) flags |= FLAG_CACHE_DISABLE | FLAG_WRITE_THROUGH;
-
         const auto invalidate = get_current() == space;
 
         while (count > 0) {
@@ -286,7 +295,7 @@ namespace cosmos::memory::virt {
 
             // 1 gB
             if (gb_pages_supported && virt % (512 * 512) == 0 && phys % (512 * 512) == 0 && count >= (512 * 512)) {
-                pdp_table[addr.pdp] = ((phys * 4096) & DIRECT_PDP_ADDRESS_MASK) | FLAG_DIRECT | flags;
+                pdp_table[addr.pdp] = ((phys * 4096) & DIRECT_PDP_ADDRESS_MASK) | FLAG_DIRECT | entry_flags;
                 if (invalidate) asm volatile("invlpg (%0)" ::"r"(virt * 4096ul) : "memory");
 
                 virt += 512 * 512;
@@ -301,7 +310,7 @@ namespace cosmos::memory::virt {
 
             // 2 mB
             if (virt % 512 == 0 && phys % 512 == 0 && count >= 512) {
-                pd_table[addr.pd] = ((phys * 4096) & DIRECT_PD_ADDRESS_MASK) | FLAG_DIRECT | flags;
+                pd_table[addr.pd] = ((phys * 4096) & DIRECT_PD_ADDRESS_MASK) | FLAG_DIRECT | entry_flags;
                 if (invalidate) asm volatile("invlpg (%0)" ::"r"(virt * 4096ul) : "memory");
 
                 virt += 512;
@@ -315,7 +324,7 @@ namespace cosmos::memory::virt {
             const auto pt_table = get_child_table(pd_table[addr.pd]);
             if (pt_table == nullptr) return false;
 
-            pt_table[addr.pt] = ((phys * 4096) & ADDRESS_MASK) | flags;
+            pt_table[addr.pt] = ((phys * 4096) & ADDRESS_MASK) | entry_flags;
             if (invalidate) asm volatile("invlpg (%0)" ::"r"(virt * 4096ul) : "memory");
 
             virt++;

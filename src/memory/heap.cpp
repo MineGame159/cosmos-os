@@ -22,7 +22,7 @@ namespace cosmos::memory::heap {
         if (phys == 0) return false;
 
         const auto space = virt::get_current();
-        if (!virt::map_pages(space, virt::HEAP / 4096ul + page_count, phys / 4096ul, 1, false)) return false;
+        if (!virt::map_pages(space, virt::HEAP / 4096ul + page_count, phys / 4096ul, 1, virt::Flags::Write)) return false;
 
         if (tail == nullptr || tail->used) {
             const auto region = reinterpret_cast<Region*>(virt::HEAP + page_count * 4096ul);

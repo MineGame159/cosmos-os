@@ -1,9 +1,13 @@
 #include "scheduler.hpp"
 
+#include "elf/loader.hpp"
+#include "elf/parser.hpp"
+#include "log/log.hpp"
 #include "memory/heap.hpp"
 #include "private.hpp"
 #include "stl/linked_list.hpp"
 #include "utils.hpp"
+#include "vfs/vfs.hpp"
 
 namespace cosmos::scheduler {
     static stl::LinkedList<Process> processes = {};
@@ -60,8 +64,33 @@ namespace cosmos::scheduler {
         )");
     }
 
+    void delete_process(const Process* process, stl::LinkedList<Process>::Iterator* it_ptr) {
+        memory::virt::destroy(process->space);
+        memory::heap::free(process->stack);
+
+        if (it_ptr != nullptr) {
+            processes.remove_free(*it_ptr);
+        } else {
+            for (auto it = processes.begin(); it != stl::LinkedList<Process>::end(); ++it) {
+                if (*it == process) {
+                    processes.remove_free(it);
+                    break;
+                }
+            }
+        }
+    }
+
+    __attribute__((naked)) void return_trampoline() {
+        asm volatile(R"(
+            mov %%rax, %%rdi
+            jmp %P0
+        )" ::"i"(exit));
+    }
+
     ProcessId create_process(const ProcessFn fn) {
         const auto space = memory::virt::create();
+        if (space == 0) return 0;
+
         return create_process(fn, space);
     }
 
@@ -78,7 +107,7 @@ namespace cosmos::scheduler {
 
         auto stack = static_cast<uint64_t*>(process->stack_top);
 
-        *--stack = reinterpret_cast<uint64_t>(exit);
+        *--stack = reinterpret_cast<uint64_t>(return_trampoline);
         *--stack = reinterpret_cast<uint64_t>(fn);
         *--stack = 0x202;
 
@@ -89,6 +118,56 @@ namespace cosmos::scheduler {
         process->rsp = reinterpret_cast<uint64_t>(stack);
 
         return reinterpret_cast<ProcessId>(process);
+    }
+
+    ProcessId create_process(const stl::StringView path) {
+        // Open file
+        const auto file = vfs::open_file(path, vfs::Mode::Read);
+
+        if (file == nullptr) {
+            ERROR("Failed to open file");
+            return 0;
+        }
+
+        // Parse ELF binary
+        const auto binary = elf::parse(file);
+
+        if (binary == nullptr) {
+            vfs::close_file(file);
+            return 0;
+        }
+
+        // Create process
+        const auto id = create_process(reinterpret_cast<ProcessFn>(binary->virt_entry));
+
+        if (id == 0) {
+            memory::heap::free(binary);
+            vfs::close_file(file);
+            return 0;
+        }
+
+        INFO("Creating process %llu for file %s", id, path.data());
+        const auto process = reinterpret_cast<Process*>(id);
+
+        // Load ELF binary
+        const auto prev_space = memory::virt::get_current();
+        memory::virt::switch_to(process->space);
+
+        if (!elf::load(file, binary)) {
+            memory::virt::switch_to(prev_space);
+            delete_process(process, nullptr);
+            memory::heap::free(binary);
+            vfs::close_file(file);
+            return 0;
+        }
+
+        memory::virt::switch_to(prev_space);
+
+        // Cleanup
+        memory::heap::free(binary);
+        vfs::close_file(file);
+
+        return id;
     }
 
     ProcessId get_current_process() {
@@ -120,15 +199,14 @@ namespace cosmos::scheduler {
 
         for (;;) {
             if (current->state == State::Exited) {
+                INFO("Process %llu exited with status %lu", reinterpret_cast<ProcessId>(*current), current->status);
+
                 if (processes.single_item()) {
                     utils::panic(nullptr, "[scheduler] All processes exited, stopping");
                 }
 
                 if (*current != old_process) {
-                    memory::virt::destroy(current->space);
-                    memory::heap::free(current->stack);
-
-                    processes.remove_free(current);
+                    delete_process(*current, &current);
                     continue;
                 }
             }
@@ -154,8 +232,10 @@ namespace cosmos::scheduler {
         asm volatile("sti" ::: "memory");
     }
 
-    void exit() {
+    void exit(const uint32_t status) {
         current->state = State::Exited;
+        current->status = status;
+
         yield();
     }
 

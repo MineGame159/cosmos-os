@@ -39,7 +39,7 @@ namespace cosmos::log {
             const auto phys = memory::phys::alloc_pages(1);
             const auto space = memory::virt::get_current();
 
-            if (!memory::virt::map_pages(space, (memory::virt::LOG + capacity) / 4096, phys / 4096, 1, false)) {
+            if (!memory::virt::map_pages(space, (memory::virt::LOG + capacity) / 4096, phys / 4096, 1, memory::virt::Flags::Write)) {
                 return;
             }
 
@@ -112,7 +112,7 @@ namespace cosmos::log {
         const auto phys = memory::virt::get_phys(reinterpret_cast<uint64_t>(initial_page));
         const auto space = memory::virt::get_current();
 
-        if (!memory::virt::map_pages(space, memory::virt::LOG / 4096, phys / 4096, 1, false)) {
+        if (!memory::virt::map_pages(space, memory::virt::LOG / 4096, phys / 4096, 1, memory::virt::Flags::Write)) {
             return;
         }
 

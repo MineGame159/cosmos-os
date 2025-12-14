@@ -79,7 +79,7 @@ namespace cosmos::elf {
             return nullptr;
         }
 
-        if (identifier->abi != 0x03) {
+        if (identifier->abi != 0x00 && identifier->abi != 0x03) {
             ERROR("Invalid identifier abi, only supports Linux");
             return nullptr;
         }

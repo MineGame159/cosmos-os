@@ -19,4 +19,8 @@ namespace cosmos::memory::virt {
 
     /// Kernel starts at the last 2 gB of the entire address space
     constexpr uint64_t KERNEL = 0xFFFFFFFF80000000;
+
+    constexpr bool is_kernel(const uint64_t addr) {
+        return addr >= DIRECT_MAP;
+    }
 } // namespace cosmos::memory::virt

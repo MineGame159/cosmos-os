@@ -23,6 +23,7 @@ executable(
         'src/memory/virtual.cpp',
         'src/memory/heap.cpp',
         'src/elf/parser.cpp',
+        'src/elf/loader.cpp',
         'src/scheduler/event.cpp',
         'src/scheduler/scheduler.cpp',
         'src/devices/pit.cpp',
@@ -66,3 +67,5 @@ executable(
         '-T' + meson.project_source_root() + '/linker.ld'
     ]
 )
+
+subproject('shell')

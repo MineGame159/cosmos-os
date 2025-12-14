@@ -8,6 +8,7 @@ namespace cosmos::scheduler {
     struct Process {
         ProcessFn fn;
         State state;
+        uint32_t status;
 
         memory::virt::Space space;
 

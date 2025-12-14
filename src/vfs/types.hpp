@@ -98,6 +98,8 @@ namespace cosmos::vfs {
                 cursor = data_size + offset;
                 break;
             }
+
+            if (cursor >= data_size) cursor = data_size;
         }
     };
 } // namespace cosmos::vfs

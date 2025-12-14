@@ -1,5 +1,7 @@
 #pragma once
 
+#include "stl/bit_field.hpp"
+
 #include <cstdint>
 
 namespace cosmos::memory::virt {
@@ -18,6 +20,14 @@ namespace cosmos::memory::virt {
 
     // Space
 
+    enum class Flags : uint8_t {
+        None = 0,
+        Write = 1 << 0,
+        Execute = 1 << 1,
+        Uncached = 1 << 2,
+    };
+    ENUM_BIT_FIELD(Flags)
+
     using Space = uint64_t;
 
     Space create();
@@ -27,7 +37,7 @@ namespace cosmos::memory::virt {
     /// meaning it assumes full ownership of the underlying memory
     void destroy(Space space);
 
-    bool map_pages(Space space, uint64_t virt, uint64_t phys, uint64_t count, bool cache_disabled);
+    bool map_pages(Space space, uint64_t virt, uint64_t phys, uint64_t count, Flags flags);
 
     void switch_to(Space space);
     bool switched();

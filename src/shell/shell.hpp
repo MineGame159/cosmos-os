@@ -6,7 +6,7 @@
 
 namespace cosmos::shell {
     [[noreturn]]
-    void run();
+    uint32_t run();
 
     void set_color(Color color);
 

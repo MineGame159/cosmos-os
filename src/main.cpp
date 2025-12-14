@@ -25,7 +25,7 @@
 
 using namespace cosmos;
 
-void init() {
+uint32_t init() {
     devices::pit::start();
     if (!devices::ps2kbd::init()) utils::halt();
 
@@ -45,8 +45,13 @@ void init() {
 
     INFO("Initialized");
 
+    vfs::mount("/iso", "iso9660", "/dev/ata01");
+    scheduler::create_process("/iso/shell");
+
     log::disable_display();
     scheduler::create_process(shell::run);
+
+    return 0;
 }
 
 extern "C" [[noreturn]]

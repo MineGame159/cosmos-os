@@ -125,7 +125,7 @@ namespace cosmos::shell {
 
     void fill_cell(uint32_t pixel);
 
-    void run() {
+    uint32_t run() {
         const auto fb = limine::get_framebuffer();
 
         fbdev = vfs::open_file("/dev/framebuffer", vfs::Mode::ReadWrite);
