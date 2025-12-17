@@ -150,6 +150,18 @@ namespace cosmos::utils {
         }
     }
 
+    uint8_t memcmp(const void* lhs, const void* rhs, const std::size_t size) {
+        const auto lhs_ = static_cast<const uint8_t*>(lhs);
+        const auto rhs_ = static_cast<const uint8_t*>(rhs);
+
+        for (std::size_t i = 0; i < size; i++) {
+            if (lhs_[i] < rhs_[i]) return -1;
+            if (lhs_[i] > rhs_[i]) return 1;
+        }
+
+        return 0;
+    }
+
     uint32_t strlen(const char* str) {
         auto length = 0u;
 
@@ -231,5 +243,10 @@ void* memset(void* dest, const int ch, const std::size_t count) {
 void* memcpy(void* dest, const void* src, const std::size_t count) {
     cosmos::utils::memcpy(dest, src, count);
     return dest;
+}
+
+
+int memcmp(const void* lhs, const void* rhs, const std::size_t size) {
+    return cosmos::utils::memcmp(lhs, rhs, size);
 }
 }

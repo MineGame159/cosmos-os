@@ -1,3 +1,4 @@
+#include "acpi/acpi.hpp"
 #include "devices/atapio.hpp"
 #include "devices/framebuffer.hpp"
 #include "devices/info.hpp"
@@ -13,6 +14,7 @@
 #include "memory/heap.hpp"
 #include "memory/offsets.hpp"
 #include "memory/physical.hpp"
+#include "memory/virt_range_alloc.hpp"
 #include "memory/virtual.hpp"
 #include "scheduler/scheduler.hpp"
 #include "serial.hpp"
@@ -26,6 +28,8 @@
 using namespace cosmos;
 
 uint32_t init() {
+    acpi::init();
+
     devices::pit::start();
     if (!devices::ps2kbd::init()) utils::halt();
 
@@ -79,6 +83,7 @@ void main() {
     log::enable_paging();
 
     memory::heap::init();
+    memory::virt::init_range_alloc();
 
     scheduler::create_process(init, space);
     scheduler::run();

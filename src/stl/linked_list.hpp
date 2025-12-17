@@ -68,19 +68,36 @@ namespace cosmos::stl {
             return &node->item;
         }
 
-        void remove_free(Node* prev, Node* node) {
-            if (prev != nullptr) {
-                prev->next = node->next;
+        T* insert_after_alloc(Node* current, const std::size_t additional_size = 0) {
+            const auto node = static_cast<Node*>(memory::heap::alloc(sizeof(Node) + additional_size, alignof(Node)));
+
+            node->next = current->next;
+            current->next = node;
+
+            if (tail == current) {
+                tail = node;
             }
 
-            if (head == node) {
-                head = node->next;
+            return &node->item;
+        }
+
+        T* insert_after_alloc(Iterator& it, const std::size_t additional_size = 0) {
+            return insert_after_alloc(it.node, additional_size);
+        }
+
+        void remove_free(Node* prev, Node* current) {
+            if (prev != nullptr) {
+                prev->next = current->next;
             }
-            if (tail == node) {
+
+            if (head == current) {
+                head = current->next;
+            }
+            if (tail == current) {
                 tail = prev;
             }
 
-            memory::heap::free(node);
+            memory::heap::free(current);
         }
 
         void remove_free(Iterator& it) {

@@ -14,8 +14,11 @@ namespace cosmos::memory::virt {
     /// Log starts 1 gB after framebuffer
     constexpr uint64_t LOG = FRAMEBUFFER + (1ul * GB);
 
-    /// Heap starts 1 gB after log
-    constexpr uint64_t HEAP = LOG + (1ul * GB);
+    /// Range allocator starts 1gB after framebuffer
+    constexpr uint64_t RANGE_ALLOC = LOG + (1ul * GB);
+
+    /// Heap starts 1 gB after range allocator
+    constexpr uint64_t HEAP = RANGE_ALLOC + (1ul * GB);
 
     /// Kernel starts at the last 2 gB of the entire address space
     constexpr uint64_t KERNEL = 0xFFFFFFFF80000000;

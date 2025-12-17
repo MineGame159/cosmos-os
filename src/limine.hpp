@@ -51,4 +51,6 @@ namespace cosmos::limine {
     uint64_t get_hhdm();
 
     const Framebuffer& get_framebuffer();
+
+    uint64_t get_rsdp();
 } // namespace cosmos::limine

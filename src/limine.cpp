@@ -35,6 +35,12 @@ static volatile limine_framebuffer_request framebuffer_request = {
     .revision = 0,
 };
 
+__attribute__((unused, section(".requests"))) //
+static volatile limine_rsdp_request rsdp_request = {
+    .id = LIMINE_RSDP_REQUEST_ID,
+    .revision = 0,
+};
+
 __attribute__((unused, section(".requests_end"))) //
 static volatile uint64_t requests_end[] = LIMINE_REQUESTS_END_MARKER;
 
@@ -75,6 +81,10 @@ namespace cosmos::limine {
 
         if (framebuffer_request.response == nullptr || framebuffer_request.response->framebuffer_count < 1) {
             utils::panic(nullptr, "[limine] Framebuffer missing");
+        }
+
+        if (rsdp_request.response->address == nullptr) {
+            utils::panic(nullptr, "[limine] RSDP missing");
         }
 
         init_framebuffer();
@@ -161,5 +171,9 @@ namespace cosmos::limine {
 
     const Framebuffer& get_framebuffer() {
         return fb;
+    }
+
+    uint64_t get_rsdp() {
+        return reinterpret_cast<uint64_t>(rsdp_request.response->address) - get_hhdm();
     }
 } // namespace cosmos::limine
