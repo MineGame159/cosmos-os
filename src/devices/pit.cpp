@@ -1,6 +1,7 @@
 #include "pit.hpp"
 
 #include "interrupts/isr.hpp"
+#include "stl/fixed_list.hpp"
 #include "utils.hpp"
 
 namespace cosmos::devices::pit {
@@ -10,6 +11,10 @@ namespace cosmos::devices::pit {
         uint64_t data;
     };
 
+    static bool operator==(const Repeat& lhs, const Repeat& rhs) {
+        return lhs.ms == rhs.ms;
+    }
+
     constexpr uint16_t CHANNEL0 = 0x40;
     constexpr uint16_t CHANNEL1 = 0x41;
     constexpr uint16_t CHANNEL2 = 0x42;
@@ -17,16 +22,12 @@ namespace cosmos::devices::pit {
 
     static uint64_t ticks = 0;
 
-    constexpr uint32_t REPEAT_CAPACITY = 8;
-    static Repeat repeats[REPEAT_CAPACITY] = {};
-    static uint32_t repeat_count = 0;
+    static stl::FixedList<Repeat, 8, {}> repeats = {};
 
     void tick([[maybe_unused]] isr::InterruptInfo* info) {
         ticks++;
 
-        for (auto i = 0u; i < repeat_count; i++) {
-            const auto& repeat = repeats[i];
-
+        for (const auto& repeat : repeats) {
             if (repeat.ms != 0 && ticks % repeat.ms == 0) {
                 repeat.fn(repeat.data);
             }
@@ -48,39 +49,20 @@ namespace cosmos::devices::pit {
     bool run_every_x_ms(const uint64_t ms, const HandlerFn fn, const uint64_t data) {
         asm volatile("cli" ::: "memory");
 
-        for (auto i = 0u; i < REPEAT_CAPACITY; i++) {
-            if (repeats[i].ms == 0) {
-                repeats[i] = {
-                    .ms = ms,
-                    .fn = fn,
-                    .data = data,
-                };
-
-                if (i == repeat_count) {
-                    repeat_count = i + 1;
-                }
-
-                asm volatile("sti" ::: "memory");
-                return true;
-            }
-        }
+        const auto result = repeats.add({
+            .ms = ms,
+            .fn = fn,
+            .data = data,
+        });
 
         asm volatile("sti" ::: "memory");
-        return false;
+
+        return result;
     }
 
     void timer_destroy(const uint64_t data) {
         asm volatile("cli" ::: "memory");
-
-        repeats[data].ms = 0;
-
-        if (data == repeat_count - 1) {
-            for (auto i = static_cast<int32_t>(repeat_count) - 1; i >= 0; i--) {
-                if (repeats[i].ms != 0) break;
-                repeat_count--;
-            }
-        }
-
+        repeats.remove_at(data);
         asm volatile("sti" ::: "memory");
     }
 
@@ -89,18 +71,8 @@ namespace cosmos::devices::pit {
     }
 
     scheduler::EventHandle create_timer(const uint64_t ms) {
-        auto found = false;
-        auto index = 0u;
-
-        for (auto i = 0u; i < REPEAT_CAPACITY; i++) {
-            if (repeats[i].ms == 0) {
-                found = true;
-                index = i;
-                break;
-            }
-        }
-
-        if (!found) return 0;
+        const auto index = repeats.index_of({});
+        if (index == -1) return 0;
 
         const auto event = scheduler::create_event(timer_destroy, index);
         run_every_x_ms(ms, timer_tick, event);

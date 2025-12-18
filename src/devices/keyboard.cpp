@@ -1,15 +1,13 @@
 #include "keyboard.hpp"
 
 #include "scheduler/event.hpp"
+#include "stl/fixed_list.hpp"
 #include "stl/ring_buffer.hpp"
 #include "vfs/devfs.hpp"
 
 namespace cosmos::devices::keyboard {
     static stl::RingBuffer<Event, 32> events = {};
-
-    constexpr uint32_t EVENT_HANDLE_CAPACITY = 8;
-    static scheduler::EventHandle event_handles[EVENT_HANDLE_CAPACITY];
-    static uint32_t event_handle_count = 0;
+    static stl::FixedList<scheduler::EventHandle, 8, 0> event_handles = {};
 
     uint64_t kb_seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
         return 0;
@@ -34,15 +32,7 @@ namespace cosmos::devices::keyboard {
 
     void event_destroy(const uint64_t data) {
         asm volatile("cli" ::: "memory");
-        event_handles[data] = 0;
-
-        if (data == event_handle_count - 1) {
-            for (auto i = static_cast<int32_t>(event_handle_count) - 1; i >= 0; i--) {
-                if (event_handles[i] != 0) break;
-                event_handle_count--;
-            }
-        }
-
+        event_handles.remove_at(data);
         asm volatile("sti" ::: "memory");
     }
 
@@ -51,31 +41,18 @@ namespace cosmos::devices::keyboard {
         case IOCTL_CREATE_EVENT: {
             asm volatile("cli" ::: "memory");
 
-            auto found = false;
-            auto index = 0u;
+            scheduler::EventHandle* handle;
+            size_t handle_index;
 
-            for (auto i = 0u; i < EVENT_HANDLE_CAPACITY; i++) {
-                if (event_handles[i] == 0) {
-                    found = true;
-                    index = i;
-                    break;
-                }
-            }
-
-            if (!found) {
+            if (!event_handles.try_add(handle, handle_index)) {
                 asm volatile("sti" ::: "memory");
                 return 0;
             }
 
-            const auto event = scheduler::create_event(event_destroy, index);
-            event_handles[index] = event;
-
-            if (index >= event_handle_count) {
-                event_handle_count = index + 1;
-            }
+            *handle = scheduler::create_event(event_destroy, handle_index);
 
             asm volatile("sti" ::: "memory");
-            return event;
+            return *handle;
         }
         case IOCTL_RESET_BUFFER: {
             asm volatile("cli" ::: "memory");
@@ -104,8 +81,8 @@ namespace cosmos::devices::keyboard {
 
     void add_event(const Event event) {
         if (events.add(event)) {
-            for (auto i = 0u; i < event_handle_count; i++) {
-                if (event_handles[i] != 0) scheduler::signal_event(event_handles[i]);
+            for (const auto handle : event_handles) {
+                scheduler::signal_event(handle);
             }
         }
     }

@@ -1,11 +1,10 @@
 #pragma once
 
 #include "scheduler.hpp"
+#include "stl/fixed_list.hpp"
 
 namespace cosmos::scheduler {
     struct Event;
-
-    constexpr uint32_t FD_TABLE_SIZE = 64;
 
     struct Process {
         ProcessFn fn;
@@ -25,7 +24,7 @@ namespace cosmos::scheduler {
         uint32_t event_count;
         bool event_signalled;
 
-        vfs::File* fd_table[FD_TABLE_SIZE];
+        stl::FixedList<vfs::File*, 64, nullptr> fd_table;
     };
 
     struct Event {
