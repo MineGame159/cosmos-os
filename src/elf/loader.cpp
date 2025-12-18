@@ -7,7 +7,7 @@
 #include "utils.hpp"
 
 namespace cosmos::elf {
-    bool load_header_load(vfs::File* file, const ProgramHeader& header) {
+    bool load_header_load(const memory::virt::Space space, vfs::File* file, const ProgramHeader& header) {
         // Validate header
         if (header.file_size > header.virt_size) {
             ERROR("Corrupted header, file_size > virt_size");
@@ -38,9 +38,7 @@ namespace cosmos::elf {
         }
 
         // Map virtual address space
-        const auto space = memory::virt::get_current();
-
-        auto flags = memory::virt::Flags::Write;
+        auto flags = memory::virt::Flags::Write | memory::virt::Flags::User;
         if (header.flags / ProgramHeaderFlags::Execute) flags |= memory::virt::Flags::Execute;
 
         if (!memory::virt::map_pages(space, virt_start, phys, count, flags)) {
@@ -52,7 +50,7 @@ namespace cosmos::elf {
         // Read header data
         file->ops->seek(file, vfs::SeekType::Start, static_cast<int64_t>(header.file_offset));
 
-        const auto ptr = reinterpret_cast<uint8_t*>(header.virt_offset);
+        const auto ptr = reinterpret_cast<uint8_t*>(memory::virt::DIRECT_MAP + phys * 4096 + start_addr % 4096);
 
         if (file->ops->read(file, ptr, header.file_size) != header.file_size) {
             ERROR("Failed to ready program header data");
@@ -67,10 +65,10 @@ namespace cosmos::elf {
         return true;
     }
 
-    bool load(vfs::File* file, const Binary* binary) {
+    bool load(const memory::virt::Space space, vfs::File* file, const Binary* binary) {
         for (const auto& header : binary->program_headers) {
             if (header.type == ProgramHeaderType::Load) {
-                if (!load_header_load(file, header)) return false;
+                if (!load_header_load(space, file, header)) return false;
             }
         }
 

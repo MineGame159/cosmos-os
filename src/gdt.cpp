@@ -1,6 +1,7 @@
 #include "gdt.hpp"
 
 #include "log/log.hpp"
+#include "tss.hpp"
 
 #include <cstdint>
 
@@ -31,7 +32,7 @@ namespace cosmos::gdt {
         void* address;
     };
 
-    static Entry entries[5];
+    static Entry entries[7];
     static Descriptor descriptor;
 
     Entry entry(const uint32_t base, const uint32_t limit, const uint8_t access, const uint8_t flags) {
@@ -51,9 +52,26 @@ namespace cosmos::gdt {
         entries[0] = entry(0, 0, 0, 0);                                                // Null
         entries[1] = entry(0, 0, base_access | ACCESS_EXEC, FLAGS_LONG);               // Kernel - Code
         entries[2] = entry(0, 0, base_access, 0);                                      // Kernel - Data
-        entries[3] = entry(0, 0, base_access | ACCESS_EXEC | ACCESS_USER, FLAGS_LONG); // User - Code
-        entries[4] = entry(0, 0, base_access | ACCESS_USER, 0);                        // User - Data
+        entries[3] = entry(0, 0, base_access | ACCESS_USER, 0);                        // User - Data
+        entries[4] = entry(0, 0, base_access | ACCESS_EXEC | ACCESS_USER, FLAGS_LONG); // User - Code
 
+        // TSS
+        const uint64_t tss_base = tss::get_address();
+        const uint32_t tss_limit = tss::get_size();
+        constexpr auto access = ACCESS_PRESENT | ACCESS_EXEC | ACCESS_ACCESSED;
+
+        entries[5] = entry(static_cast<uint32_t>(tss_base), tss_limit, access, 0);
+
+        entries[6] = {
+            .limit_low = static_cast<uint16_t>((tss_base >> 32) & 0xFFFF),
+            .base_low = static_cast<uint16_t>((tss_base >> 48) & 0xFFFF),
+            .base_mid = 0,
+            .access = 0,
+            .limit_high_flags = 0,
+            .base_high = 0,
+        };
+
+        // Load GDT
         descriptor = {
             .size = sizeof(entries) - 1,
             .address = entries,

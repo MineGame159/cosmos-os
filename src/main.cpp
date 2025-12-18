@@ -19,6 +19,8 @@
 #include "scheduler/scheduler.hpp"
 #include "serial.hpp"
 #include "shell/shell.hpp"
+#include "syscalls/init.hpp"
+#include "tss.hpp"
 #include "utils.hpp"
 #include "vfs/devfs.hpp"
 #include "vfs/iso9660.hpp"
@@ -27,7 +29,7 @@
 
 using namespace cosmos;
 
-uint32_t init() {
+void init() {
     acpi::init();
 
     devices::pit::start();
@@ -53,9 +55,9 @@ uint32_t init() {
     scheduler::create_process("/iso/shell");
 
     log::disable_display();
-    scheduler::create_process(shell::run);
+    scheduler::create_process(shell::run, scheduler::Land::Kernel);
 
-    return 0;
+    scheduler::exit(0);
 }
 
 extern "C" [[noreturn]]
@@ -68,6 +70,7 @@ void main() {
     INFO("Starting");
 
     gdt::init();
+    tss::init();
     isr::init();
 
     memory::phys::init();
@@ -84,8 +87,9 @@ void main() {
 
     memory::heap::init();
     memory::virt::init_range_alloc();
+    syscalls::init();
 
-    scheduler::create_process(init, space);
+    scheduler::create_process(init, space, scheduler::Land::Kernel);
     scheduler::run();
 
     utils::halt();

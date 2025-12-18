@@ -269,7 +269,7 @@ namespace cosmos::memory::virt {
             const auto child_table = get_ptr_from_phys<uint64_t>(child_table_phys);
             utils::memset(child_table, 0, 4096);
 
-            entry = (child_table_phys & ADDRESS_MASK) | FLAG_PRESENT | FLAG_WRITABLE;
+            entry = (child_table_phys & ADDRESS_MASK) | FLAG_PRESENT | FLAG_WRITABLE | FLAG_USER;
         }
 
         return get_ptr_from_phys<uint64_t>(entry & ADDRESS_MASK);
@@ -282,6 +282,7 @@ namespace cosmos::memory::virt {
         if (flags / Flags::Write) entry_flags |= FLAG_WRITABLE;
         if (!(flags / Flags::Execute)) entry_flags |= FLAG_NO_EXECUTE;
         if (flags / Flags::Uncached) entry_flags |= FLAG_CACHE_DISABLE | FLAG_WRITE_THROUGH;
+        if (flags / Flags::User) entry_flags |= FLAG_USER;
 
         // Map
         const auto pml4_table = get_ptr_from_phys<uint64_t>(space);

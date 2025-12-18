@@ -52,6 +52,27 @@ namespace cosmos::utils {
         return value & ~(alignment - 1);
     }
 
+    // MSR
+
+    constexpr uint32_t MSR_EFER = 0xC0000080;
+    constexpr uint32_t MSR_STAR = 0xC0000081;
+    constexpr uint32_t MSR_LSTAR = 0xC0000082;
+    constexpr uint32_t MSR_SFMASK = 0xC0000084;
+    constexpr uint32_t MSR_KERNEL_GS_BASE = 0xC0000102;
+
+    inline uint64_t msr_read(const uint32_t msr) {
+        uint32_t lo;
+        uint32_t hi;
+        asm volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(msr) : "memory");
+        return (static_cast<uint64_t>(hi) << 32) | lo;
+    }
+
+    inline void msr_write(const uint32_t msr, const uint64_t value) {
+        const auto lo = value & 0xFFFFFFFF;
+        const auto hi = (value >> 32) & 0xFFFFFFFF;
+        asm volatile("wrmsr" : : "a"(lo), "d"(hi), "c"(msr) : "memory");
+    }
+
     // Byte
 
     inline uint8_t byte_in(uint16_t port) {
@@ -61,7 +82,7 @@ namespace cosmos::utils {
     }
 
     inline void byte_out(uint16_t port, uint8_t data) {
-        asm volatile("out %%al, %%dx" ::"a"(data), "d"(port));
+        asm volatile("out %%al, %%dx" : : "a"(data), "d"(port));
     }
 
     // Short
@@ -73,7 +94,7 @@ namespace cosmos::utils {
     }
 
     inline void short_out(uint16_t port, uint16_t data) {
-        asm volatile("out %%ax, %%dx" ::"a"(data), "d"(port));
+        asm volatile("out %%ax, %%dx" : : "a"(data), "d"(port));
     }
 
     // Int
@@ -85,7 +106,7 @@ namespace cosmos::utils {
     }
 
     inline void int_out(uint16_t port, uint32_t data) {
-        asm volatile("out %%eax, %%dx" ::"a"(data), "d"(port));
+        asm volatile("out %%eax, %%dx" : : "a"(data), "d"(port));
     }
 
     // Other

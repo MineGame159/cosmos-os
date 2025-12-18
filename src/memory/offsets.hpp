@@ -5,6 +5,8 @@
 namespace cosmos::memory::virt {
     constexpr uint64_t GB = 512ul * 512ul * 4096ul;
 
+    constexpr uint64_t LOWER_HALF_END = 0x0000800000000000;
+
     /// Direct map starts immediately at the higher half split
     constexpr uint64_t DIRECT_MAP = 0xFFFF800000000000;
 

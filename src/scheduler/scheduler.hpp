@@ -6,7 +6,7 @@
 #include <cstdint>
 
 namespace cosmos::scheduler {
-    using ProcessFn = uint32_t (*)();
+    using ProcessFn = void (*)();
 
     enum class State : uint8_t {
         Waiting,
@@ -16,17 +16,22 @@ namespace cosmos::scheduler {
         Exited,
     };
 
+    enum class Land : uint8_t {
+        Kernel,
+        User,
+    };
+
     using ProcessId = uint64_t;
 
-    ProcessId create_process(ProcessFn fn);
-    ProcessId create_process(ProcessFn fn, memory::virt::Space space);
+    ProcessId create_process(ProcessFn fn, memory::virt::Space space, Land land);
+    ProcessId create_process(ProcessFn fn, Land land);
     ProcessId create_process(stl::StringView path);
 
     ProcessId get_current_process();
     State get_process_state(ProcessId id);
 
     void yield();
-    void exit(uint32_t status);
+    void exit(uint64_t status);
 
     void suspend();
     void resume(ProcessId id);

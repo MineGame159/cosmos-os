@@ -7,6 +7,7 @@
 #include "limine.hpp"
 #include "memory/heap.hpp"
 #include "nanoprintf.h"
+#include "scheduler/scheduler.hpp"
 #include "utils.hpp"
 #include "vfs/path.hpp"
 #include "vfs/vfs.hpp"
@@ -125,7 +126,7 @@ namespace cosmos::shell {
 
     void fill_cell(uint32_t pixel);
 
-    uint32_t run() {
+    void run() {
         const auto fb = limine::get_framebuffer();
 
         fbdev = vfs::open_file("/dev/framebuffer", vfs::Mode::ReadWrite);
@@ -176,6 +177,8 @@ namespace cosmos::shell {
             const auto args = utils::str_trim_left(&prompt[name_length]);
             cmd_fn(args);
         }
+
+        scheduler::exit(0);
     }
 
     void print(const char ch) {

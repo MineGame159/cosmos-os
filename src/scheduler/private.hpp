@@ -7,14 +7,17 @@ namespace cosmos::scheduler {
 
     struct Process {
         ProcessFn fn;
+        Land land;
+
         State state;
-        uint32_t status;
+        uint64_t status;
 
         memory::virt::Space space;
 
-        void* stack;
-        void* stack_top;
-        uint64_t rsp;
+        void* kernel_stack;
+        uint64_t kernel_stack_rsp;
+
+        uint64_t user_stack_phys;
 
         Event** events;
         uint32_t event_count;

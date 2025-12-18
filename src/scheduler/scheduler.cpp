@@ -4,16 +4,28 @@
 #include "elf/parser.hpp"
 #include "log/log.hpp"
 #include "memory/heap.hpp"
+#include "memory/offsets.hpp"
+#include "memory/physical.hpp"
 #include "private.hpp"
 #include "stl/linked_list.hpp"
+#include "tss.hpp"
 #include "utils.hpp"
 #include "vfs/vfs.hpp"
 
 namespace cosmos::scheduler {
+    struct CpuStatus {
+        uint64_t kernel_rsp;
+        uint64_t user_rsp;
+        uint64_t current_process;
+    };
+
+    constexpr uint64_t KERNEL_STACK_SIZE = 4ul * 1024ul;
+    constexpr uint64_t USER_STACK_SIZE = 64ul * 1024ul;
+
     static stl::LinkedList<Process> processes = {};
     static stl::LinkedList<Process>::Iterator current = {};
 
-    constexpr uint64_t STACK_SIZE = 64ul * 1024ul;
+    static CpuStatus cpu_status = {};
 
     __attribute__((naked)) void switch_to(uint64_t* old_sp, uint64_t new_sp) {
         asm volatile(R"(
@@ -66,7 +78,7 @@ namespace cosmos::scheduler {
 
     void delete_process(const Process* process, stl::LinkedList<Process>::Iterator* it_ptr) {
         memory::virt::destroy(process->space);
-        memory::heap::free(process->stack);
+        memory::heap::free(process->kernel_stack);
 
         if (it_ptr != nullptr) {
             processes.remove_free(*it_ptr);
@@ -80,44 +92,102 @@ namespace cosmos::scheduler {
         }
     }
 
-    __attribute__((naked)) void return_trampoline() {
-        asm volatile(R"(
-            mov %%rax, %%rdi
-            jmp %P0
-        )" ::"i"(exit));
+    __attribute__((naked)) void user_entry_stub() {
+        asm volatile("iretq");
     }
 
-    ProcessId create_process(const ProcessFn fn) {
-        const auto space = memory::virt::create();
-        if (space == 0) return 0;
-
-        return create_process(fn, space);
-    }
-
-    ProcessId create_process(const ProcessFn fn, const memory::virt::Space space) {
+    ProcessId create_process(const ProcessFn fn, const memory::virt::Space space, const Land land) {
         const auto process = processes.push_back_alloc();
 
+        // Set basic fields
         process->fn = fn;
+        process->land = land;
+
         process->state = State::Waiting;
+        process->status = 0xFFFFFFFF;
 
         process->space = space;
 
-        process->stack = memory::heap::alloc(STACK_SIZE, 16);
-        process->stack_top = reinterpret_cast<void*>(reinterpret_cast<uint64_t>(process->stack) + STACK_SIZE);
+        process->events = nullptr;
+        process->event_count = 0;
+        process->event_signalled = false;
 
-        auto stack = static_cast<uint64_t*>(process->stack_top);
+        // Allocate kernel stack
+        process->kernel_stack = memory::heap::alloc(KERNEL_STACK_SIZE, 16);
 
-        *--stack = reinterpret_cast<uint64_t>(return_trampoline);
-        *--stack = reinterpret_cast<uint64_t>(fn);
-        *--stack = 0x202;
+        if (process->kernel_stack == nullptr) {
+            ERROR("Failed to allocate memory for kernel stack");
+
+            processes.remove_free(process);
+
+            return 0;
+        }
+
+        process->kernel_stack_rsp = 0;
+
+        // Allocate user stack
+        if (land == Land::User) {
+            process->user_stack_phys = memory::phys::alloc_pages(USER_STACK_SIZE / 4096ul);
+
+            if (process->user_stack_phys == 0) {
+                ERROR("Failed to allocate memory for user stack");
+
+                memory::heap::free(process->kernel_stack);
+                processes.remove_free(process);
+
+                return 0;
+            }
+
+            constexpr auto virt = (memory::virt::LOWER_HALF_END - USER_STACK_SIZE) / 4096ul;
+            const auto phys = process->user_stack_phys / 4096ul;
+            constexpr auto flags = memory::virt::Flags::Write | memory::virt::Flags::User;
+            const auto status = memory::virt::map_pages(space, virt, phys, USER_STACK_SIZE / 4096ul, flags);
+
+            if (!status) {
+                memory::phys::free_pages(phys, USER_STACK_SIZE / 4096ul);
+                memory::heap::free(process->kernel_stack);
+                processes.remove_free(process);
+
+                return 0;
+            }
+        } else {
+            process->user_stack_phys = 0;
+        }
+
+        // Setup kernel stack
+        auto stack = reinterpret_cast<uint64_t*>(static_cast<uint8_t*>(process->kernel_stack) + KERNEL_STACK_SIZE);
+
+        if (land == Land::Kernel) {
+            *--stack = reinterpret_cast<uint64_t>(fn); // Entry point
+            *--stack = 0x202;                          // Flags
+        } else {
+            *--stack = 24 | 3;                       // GDT - User data
+            *--stack = memory::virt::LOWER_HALF_END; // User RSP
+            *--stack = 0x202;                        // Flags
+            *--stack = 32 | 3;                       // GDT - User code
+
+            *--stack = reinterpret_cast<uint64_t>(fn);              // Entry point
+            *--stack = reinterpret_cast<uint64_t>(user_entry_stub); // Entry point stub
+            *--stack = 0x202;                                       // Flags
+        }
 
         for (auto i = 0ul; i < 15; i++) {
             *--stack = i;
         }
 
-        process->rsp = reinterpret_cast<uint64_t>(stack);
+        process->kernel_stack_rsp = reinterpret_cast<uint64_t>(stack);
 
         return reinterpret_cast<ProcessId>(process);
+    }
+
+    ProcessId create_process(const ProcessFn fn, const Land land) {
+        const auto space = memory::virt::create();
+        if (space == 0) return 0;
+
+        const auto id = create_process(fn, space, land);
+        if (id == 0) memory::virt::destroy(space);
+
+        return id;
     }
 
     ProcessId create_process(const stl::StringView path) {
@@ -138,7 +208,7 @@ namespace cosmos::scheduler {
         }
 
         // Create process
-        const auto id = create_process(reinterpret_cast<ProcessFn>(binary->virt_entry));
+        const auto id = create_process(reinterpret_cast<ProcessFn>(binary->virt_entry), Land::User);
 
         if (id == 0) {
             memory::heap::free(binary);
@@ -150,18 +220,12 @@ namespace cosmos::scheduler {
         const auto process = reinterpret_cast<Process*>(id);
 
         // Load ELF binary
-        const auto prev_space = memory::virt::get_current();
-        memory::virt::switch_to(process->space);
-
-        if (!elf::load(file, binary)) {
-            memory::virt::switch_to(prev_space);
+        if (!elf::load(process->space, file, binary)) {
             delete_process(process, nullptr);
             memory::heap::free(binary);
             vfs::close_file(file);
             return 0;
         }
-
-        memory::virt::switch_to(prev_space);
 
         // Cleanup
         memory::heap::free(binary);
@@ -186,6 +250,18 @@ namespace cosmos::scheduler {
         }
     }
 
+    void switch_to_process(uint64_t* old_rsp, Process* process) {
+        process->state = State::Running;
+
+        cpu_status.kernel_rsp = reinterpret_cast<uint64_t>(process->kernel_stack) + KERNEL_STACK_SIZE;
+        cpu_status.current_process = reinterpret_cast<uint64_t>(process);
+
+        tss::set_rsp(0, cpu_status.kernel_rsp);
+
+        memory::virt::switch_to(process->space);
+        switch_to(old_rsp, process->kernel_stack_rsp);
+    }
+
     void yield() {
         if (current->state == State::Running) {
             current->state = State::Waiting;
@@ -199,7 +275,7 @@ namespace cosmos::scheduler {
 
         for (;;) {
             if (current->state == State::Exited) {
-                INFO("Process %llu exited with status %lu", reinterpret_cast<ProcessId>(*current), current->status);
+                INFO("Process %llu exited with status %llu", reinterpret_cast<ProcessId>(*current), current->status);
 
                 if (processes.single_item()) {
                     utils::panic(nullptr, "[scheduler] All processes exited, stopping");
@@ -222,17 +298,14 @@ namespace cosmos::scheduler {
             move_next();
         }
 
-        current->state = State::Running;
-
         if (old_process != *current) {
-            memory::virt::switch_to(current->space);
-            switch_to(&old_process->rsp, current->rsp);
+            switch_to_process(&old_process->kernel_stack_rsp, *current);
         }
 
         asm volatile("sti" ::: "memory");
     }
 
-    void exit(const uint32_t status) {
+    void exit(const uint64_t status) {
         current->state = State::Exited;
         current->status = status;
 
@@ -255,12 +328,11 @@ namespace cosmos::scheduler {
     void run() {
         asm volatile("cli" ::: "memory");
 
+        utils::msr_write(utils::MSR_KERNEL_GS_BASE, reinterpret_cast<uint64_t>(&cpu_status));
+
         current = processes.begin();
         uint64_t old;
 
-        current->state = State::Running;
-
-        memory::virt::switch_to(current->space);
-        switch_to(&old, current->rsp);
+        switch_to_process(&old, *current);
     }
 } // namespace cosmos::scheduler

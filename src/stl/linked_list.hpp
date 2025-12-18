@@ -106,6 +106,17 @@ namespace cosmos::stl {
             it.node = next;
         }
 
+        bool remove_free(T* item) {
+            for (auto it = begin(); it != end(); ++it) {
+                if (*it == item) {
+                    remove_free(it);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         Iterator begin() const {
             return { nullptr, head };
         }

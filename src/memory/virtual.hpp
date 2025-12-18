@@ -25,6 +25,7 @@ namespace cosmos::memory::virt {
         Write = 1 << 0,
         Execute = 1 << 1,
         Uncached = 1 << 2,
+        User = 1 << 3,
     };
     ENUM_BIT_FIELD(Flags)
 
