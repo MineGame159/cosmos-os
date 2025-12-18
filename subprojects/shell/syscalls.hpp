@@ -3,7 +3,14 @@
 #include <cstdint>
 
 enum class Sys : int64_t {
-    Exit = 60,
+    Exit = 0,
+    Yield = 1,
+    OpenFile = 2,
+    CloseFile = 3,
+    Seek = 4,
+    Read = 5,
+    Write = 6,
+    Ioctl = 7,
 };
 
 template <const Sys S>

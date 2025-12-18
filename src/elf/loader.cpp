@@ -24,7 +24,7 @@ namespace cosmos::elf {
 
         if (count == 0) return true;
 
-        if (memory::virt::is_kernel(virt_start * 4096ul) || memory::virt::is_kernel(virt_end * 4096ul)) {
+        if (memory::virt::is_invalid_user(virt_start * 4096ul) || memory::virt::is_invalid_user(virt_end * 4096ul)) {
             ERROR("Invalid virtual address in header, tried to write to kernel");
             return false;
         }

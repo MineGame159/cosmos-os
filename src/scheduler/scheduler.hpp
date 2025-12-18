@@ -2,6 +2,7 @@
 
 #include "memory/virtual.hpp"
 #include "stl/string_view.hpp"
+#include "vfs/types.hpp"
 
 #include <cstdint>
 
@@ -29,6 +30,10 @@ namespace cosmos::scheduler {
 
     ProcessId get_current_process();
     State get_process_state(ProcessId id);
+
+    uint32_t add_fd(ProcessId id, vfs::File* file);
+    vfs::File* get_file(ProcessId id, uint32_t fd);
+    vfs::File* remove_fd(ProcessId id, uint32_t fd);
 
     void yield();
     void exit(uint64_t status);

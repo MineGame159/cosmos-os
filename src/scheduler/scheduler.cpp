@@ -112,6 +112,8 @@ namespace cosmos::scheduler {
         process->event_count = 0;
         process->event_signalled = false;
 
+        utils::memset(process->fd_table, 0, sizeof(vfs::File*) * FD_TABLE_SIZE);
+
         // Allocate kernel stack
         process->kernel_stack = memory::heap::alloc(KERNEL_STACK_SIZE, 16);
 
@@ -240,6 +242,35 @@ namespace cosmos::scheduler {
 
     State get_process_state(const ProcessId id) {
         return reinterpret_cast<Process*>(id)->state;
+    }
+
+    uint32_t add_fd(const ProcessId id, vfs::File* file) {
+        const auto process = reinterpret_cast<Process*>(id);
+
+        for (auto i = 0u; i < FD_TABLE_SIZE; i++) {
+            if (process->fd_table[i] == nullptr) {
+                process->fd_table[i] = file;
+                return i;
+            }
+        }
+
+        return 0xFFFFFFFF;
+    }
+
+    vfs::File* get_file(const ProcessId id, const uint32_t fd) {
+        const auto process = reinterpret_cast<Process*>(id);
+        if (fd >= FD_TABLE_SIZE) return nullptr;
+
+        return process->fd_table[fd];
+    }
+
+    vfs::File* remove_fd(const ProcessId id, const uint32_t fd) {
+        const auto process = reinterpret_cast<Process*>(id);
+
+        const auto file = process->fd_table[fd];
+        process->fd_table[fd] = nullptr;
+
+        return file;
     }
 
     void move_next() {
