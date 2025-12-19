@@ -10,12 +10,10 @@ namespace cosmos::vfs {
     Node* mount(stl::StringView target_path, stl::StringView filesystem_name, stl::StringView device_path);
     bool unmount(stl::StringView path);
 
-    File* open_file(stl::StringView path, Mode mode);
-    void close_file(File* file);
+    bool stat(stl::StringView path, Stat& stat);
 
-    void* open_dir(stl::StringView path);
-    stl::StringView read_dir(void* dir);
-    void close_dir(void* dir);
+    File* open(stl::StringView path, Mode mode);
+    void close(File* file);
 
     bool create_dir(stl::StringView path);
 

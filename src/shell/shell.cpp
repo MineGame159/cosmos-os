@@ -130,16 +130,16 @@ namespace cosmos::shell {
     void run() {
         const auto fb = limine::get_framebuffer();
 
-        fbdev = vfs::open_file("/dev/framebuffer", vfs::Mode::ReadWrite);
+        fbdev = vfs::open("/dev/framebuffer", vfs::Mode::ReadWrite);
         pitch = fb.pitch;
         columns = fb.width / FONT_WIDTH;
         rows = fb.height / FONT_HEIGHT;
 
         fg_color = WHITE;
 
-        const auto timer_file = vfs::open_file("/dev/timer", vfs::Mode::Read);
+        const auto timer_file = vfs::open("/dev/timer", vfs::Mode::Read);
         cursor_blink_event_fd = timer_file->ops->ioctl(timer_file, devices::pit::IOCTL_CREATE_EVENT, 500);
-        vfs::close_file(timer_file);
+        vfs::close(timer_file);
 
         // Clear screen
         const auto line_pixels = memory::heap::alloc_array<uint32_t>(pitch);
@@ -334,7 +334,7 @@ namespace cosmos::shell {
     void read(char* buffer, const uint32_t length) {
         using namespace devices::keyboard;
 
-        const auto kbdev = vfs::open_file("/dev/keyboard", vfs::Mode::Read);
+        const auto kbdev = vfs::open("/dev/keyboard", vfs::Mode::Read);
 
         const auto kb_event_fd = kbdev->ops->ioctl(kbdev, IOCTL_CREATE_EVENT, 0);
         const auto kb_event_file = scheduler::get_file(scheduler::get_current_process(), kb_event_fd);
@@ -394,8 +394,8 @@ namespace cosmos::shell {
         }
 
         scheduler::remove_fd(scheduler::get_current_process(), kb_event_fd);
-        vfs::close_file(kb_event_file);
-        vfs::close_file(kbdev);
+        vfs::close(kb_event_file);
+        vfs::close(kbdev);
 
         if (cursor_visible) fill_cell(0xFF000000);
 

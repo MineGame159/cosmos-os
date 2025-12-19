@@ -13,8 +13,8 @@ namespace cosmos::memory::heap {
     }
 
     template <typename T>
-    T* alloc() {
-        return static_cast<T*>(alloc(sizeof(T), alignof(T)));
+    T* alloc(const uint64_t additional_size = 0) {
+        return static_cast<T*>(alloc(sizeof(T) + additional_size, alignof(T)));
     }
 
     template <typename T>

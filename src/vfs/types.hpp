@@ -47,6 +47,12 @@ namespace cosmos::vfs {
         stl::LinkedList<Node> children;
     };
 
+    // Stat
+
+    struct Stat {
+        NodeType type;
+    };
+
     // File
 
     enum class SeekType : uint8_t {
@@ -105,5 +111,12 @@ namespace cosmos::vfs {
 
             if (cursor >= data_size) cursor = data_size;
         }
+    };
+
+    // DirEntry
+
+    struct DirEntry {
+        NodeType type;
+        const char* name;
     };
 } // namespace cosmos::vfs

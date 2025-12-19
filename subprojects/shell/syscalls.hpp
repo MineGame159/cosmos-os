@@ -5,14 +5,15 @@
 enum class Sys : int64_t {
     Exit = 0,
     Yield = 1,
-    OpenFile = 2,
-    CloseFile = 3,
-    Seek = 4,
-    Read = 5,
-    Write = 6,
-    Ioctl = 7,
-    Eventfd = 8,
-    Poll = 9,
+    Stat = 2,
+    Open = 3,
+    Close = 4,
+    Seek = 5,
+    Read = 6,
+    Write = 7,
+    Ioctl = 8,
+    Eventfd = 9,
+    Poll = 10,
 };
 
 template <const Sys S>

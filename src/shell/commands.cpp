@@ -47,7 +47,7 @@ namespace cosmos::shell {
             return;
         }
 
-        const auto file = vfs::open_file(resolved, vfs::Mode::Write);
+        const auto file = vfs::open(resolved, vfs::Mode::Write);
 
         if (file == nullptr) {
             print(RED, "Failed to open file\n");
@@ -59,7 +59,7 @@ namespace cosmos::shell {
         const auto data_length = utils::strlen(data);
 
         file->ops->write(file, data, data_length);
-        vfs::close_file(file);
+        vfs::close(file);
 
         memory::heap::free(resolved);
     }
@@ -68,7 +68,7 @@ namespace cosmos::shell {
         char* resolved = resolve_or_default(args);
         if (resolved == nullptr) return;
 
-        const auto file = vfs::open_file(resolved, vfs::Mode::Read);
+        const auto file = vfs::open(resolved, vfs::Mode::Read);
 
         if (file == nullptr) {
             print(RED, "Failed to open file\n");
@@ -84,7 +84,7 @@ namespace cosmos::shell {
         }
 
         print("\n");
-        vfs::close_file(file);
+        vfs::close(file);
 
         memory::heap::free(resolved);
     }
@@ -93,7 +93,14 @@ namespace cosmos::shell {
         char* resolved = resolve_or_default(args);
         if (resolved == nullptr) return;
 
-        const auto dir = vfs::open_dir(resolved);
+        vfs::Stat stat;
+        if (!vfs::stat(resolved, stat)) {
+            print(RED, "Not a directory\n");
+            memory::heap::free(resolved);
+            return;
+        }
+
+        const auto dir = vfs::open(resolved, vfs::Mode::Read);
 
         if (dir == nullptr) {
             print(RED, "Failed to open directory\n");
@@ -101,14 +108,14 @@ namespace cosmos::shell {
             return;
         }
 
-        stl::StringView child;
+        vfs::DirEntry entry;
 
-        while (!(child = vfs::read_dir(dir)).empty()) {
-            print(child.data(), child.size());
+        while (dir->ops->read(dir, &entry, sizeof(vfs::DirEntry)) != 0) {
+            print(entry.type == vfs::NodeType::Directory ? CYAN : WHITE, entry.name);
             print("\n");
         }
 
-        vfs::close_dir(dir);
+        vfs::close(dir);
         memory::heap::free(resolved);
     }
 
@@ -122,14 +129,12 @@ namespace cosmos::shell {
             return;
         }
 
-        const auto dir = vfs::open_dir(resolved);
-        if (dir == nullptr) {
+        vfs::Stat stat;
+        if (!vfs::stat(resolved, stat) || stat.type != vfs::NodeType::Directory) {
             print(RED, "Not a directory\n");
             memory::heap::free(resolved);
             return;
         }
-
-        vfs::close_dir(dir);
 
         if (!set_cwd(resolved)) {
             print(RED, "Failed to set cwd\n");

@@ -39,30 +39,41 @@ namespace cosmos::syscalls {
         return 0;
     }
 
-    int64_t open_file(const uint64_t path_, const uint64_t mode_) {
+    int64_t stat(const uint64_t path_, const uint64_t stat_) {
+        if (memory::virt::is_invalid_user(stat_)) return -1;
+        if (memory::virt::is_invalid_user(stat_ + sizeof(vfs::Stat))) return -1;
+
+        const auto path = get_string_view(path_);
+        const auto stat = reinterpret_cast<vfs::Stat*>(stat_);
+
+        const auto result = vfs::stat(path, *stat);
+        return result ? 0 : -1;
+    }
+
+    int64_t open(const uint64_t path_, const uint64_t mode_) {
         const auto path = get_string_view(path_);
         const auto mode = static_cast<vfs::Mode>(mode_);
         const auto pid = scheduler::get_current_process();
 
-        const auto file = vfs::open_file(path, mode);
+        const auto file = vfs::open(path, mode);
         if (file == nullptr) return -1;
 
         const auto fd = scheduler::add_fd(pid, file);
         if (fd == 0xFFFFFFFF) {
-            vfs::close_file(file);
+            vfs::close(file);
             return -1;
         }
 
         return fd;
     }
 
-    int64_t close_file(const uint64_t fd) {
+    int64_t close(const uint64_t fd) {
         const auto pid = scheduler::get_current_process();
 
         const auto file = scheduler::remove_fd(pid, fd);
         if (file == nullptr) return -1;
 
-        vfs::close_file(file);
+        vfs::close(file);
         return 0;
     }
 
@@ -179,14 +190,15 @@ namespace cosmos::syscalls {
         switch (number) {
             CASE_1(0, exit)
             CASE_0(1, yield)
-            CASE_2(2, open_file)
-            CASE_1(3, close_file)
-            CASE_3(4, seek)
-            CASE_3(5, read)
-            CASE_3(6, write)
-            CASE_3(7, ioctl)
-            CASE_0(8, eventfd)
-            CASE_4(9, poll)
+            CASE_2(2, stat)
+            CASE_2(3, open)
+            CASE_1(4, close)
+            CASE_3(5, seek)
+            CASE_3(6, read)
+            CASE_3(7, write)
+            CASE_3(8, ioctl)
+            CASE_0(9, eventfd)
+            CASE_4(10, poll)
 
         default:
             ERROR("Invalid syscalls %llu from process %llu", number, scheduler::get_current_process());

@@ -194,7 +194,7 @@ namespace cosmos::scheduler {
 
     ProcessId create_process(const stl::StringView path) {
         // Open file
-        const auto file = vfs::open_file(path, vfs::Mode::Read);
+        const auto file = vfs::open(path, vfs::Mode::Read);
 
         if (file == nullptr) {
             ERROR("Failed to open file");
@@ -205,7 +205,7 @@ namespace cosmos::scheduler {
         const auto binary = elf::parse(file);
 
         if (binary == nullptr) {
-            vfs::close_file(file);
+            vfs::close(file);
             return 0;
         }
 
@@ -214,7 +214,7 @@ namespace cosmos::scheduler {
 
         if (id == 0) {
             memory::heap::free(binary);
-            vfs::close_file(file);
+            vfs::close(file);
             return 0;
         }
 
@@ -225,13 +225,13 @@ namespace cosmos::scheduler {
         if (!elf::load(process->space, file, binary)) {
             delete_process(process, nullptr);
             memory::heap::free(binary);
-            vfs::close_file(file);
+            vfs::close(file);
             return 0;
         }
 
         // Cleanup
         memory::heap::free(binary);
-        vfs::close_file(file);
+        vfs::close(file);
 
         return id;
     }

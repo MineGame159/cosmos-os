@@ -16,7 +16,7 @@ namespace cosmos::vfs {
 
     static Node* root = nullptr;
 
-    Node* find_node(const stl::StringView& path, Node*& parent, stl::SplitIterator& it) {
+    static Node* find_node(const stl::StringView& path, Node*& parent, stl::SplitIterator& it) {
         parent = nullptr;
         auto node = root;
 
@@ -59,7 +59,7 @@ namespace cosmos::vfs {
         const_cast<char*>(filesystem->name.data())[name.size()] = '\0';
     }
 
-    void init_mount_node(Node* node, Node* parent, const Filesystem* fs, const stl::StringView name) {
+    static void init_mount_node(Node* node, Node* parent, const Filesystem* fs, const stl::StringView name) {
         utils::memset(node, 0, sizeof(Node));
 
         node->parent = parent;
@@ -160,7 +160,98 @@ namespace cosmos::vfs {
         return false;
     }
 
-    File* open_file(stl::StringView path, const Mode mode) {
+    bool stat(stl::StringView path, Stat& stat) {
+        const auto length = check_abs_path(path);
+        if (length == 0) return false;
+        path = path.substr(0, length);
+
+        Node* parent;
+        stl::SplitIterator it;
+        const auto node = find_node(path, parent, it);
+
+        if (node == nullptr) return false;
+
+        stat = {
+            .type = node->type,
+        };
+
+        return true;
+    }
+
+    static File* open_file(Node* node, const Mode mode) {
+        const auto ops = node->fs_ops->open(node, mode);
+        if (ops == nullptr) return nullptr;
+
+        if (is_read(mode)) node->open_read++;
+        if (is_write(mode)) node->open_write++;
+
+        const auto file = memory::heap::alloc<File>();
+        file->ops = ops;
+        file->on_close = nullptr;
+        file->node = node;
+        file->mode = mode;
+        file->cursor = 0;
+
+        return file;
+    }
+
+    // ReSharper disable once CppParameterMayBeConstPtrOrRef
+    static uint64_t dir_seek(File* file, [[maybe_unused]] SeekType type, [[maybe_unused]] int64_t offset) {
+        return file->cursor;
+    }
+
+    static uint64_t dir_read(File* file, void* buffer, const uint64_t length) {
+        if (length != sizeof(DirEntry)) return 0;
+
+        const auto it = reinterpret_cast<stl::LinkedList<Node>::Iterator*>(file + 1);
+
+        if (*it != stl::LinkedList<Node>::end()) {
+            *static_cast<DirEntry*>(buffer) = DirEntry{
+                .type = (*it)->type,
+                .name = (*it)->name.data(),
+            };
+
+            ++*it;
+            return sizeof(DirEntry);
+        }
+
+        return 0;
+    }
+
+    static uint64_t dir_write([[maybe_unused]] File* file, [[maybe_unused]] const void* buffer, [[maybe_unused]] uint64_t length) {
+        return 0;
+    }
+
+    static uint64_t dir_ioctl([[maybe_unused]] File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+        return IOCTL_UNKNOWN;
+    }
+
+    static constexpr FileOps dir_ops = {
+        .seek = dir_seek,
+        .read = dir_read,
+        .write = dir_write,
+        .ioctl = dir_ioctl,
+    };
+
+    static File* open_dir(Node* node, const Mode mode) {
+        if (is_write(mode)) return nullptr;
+
+        node->open_read++;
+
+        const auto file = memory::heap::alloc<File>(sizeof(stl::LinkedList<Node>::Iterator));
+        file->ops = &dir_ops;
+        file->on_close = nullptr;
+        file->node = node;
+        file->mode = mode;
+        file->cursor = 0;
+
+        const auto it = reinterpret_cast<stl::LinkedList<Node>::Iterator*>(file + 1);
+        *it = node->children.begin();
+
+        return file;
+    }
+
+    File* open(stl::StringView path, const Mode mode) {
         const auto length = check_abs_path(path);
         if (length == 0) return nullptr;
         path = path.substr(0, length);
@@ -174,30 +265,19 @@ namespace cosmos::vfs {
         }
 
         if (node != nullptr) {
-            if (node->type != NodeType::File) return nullptr;
             if (node->open_write > 0) return nullptr;
             if (is_write(mode) && node->open_read > 0) return nullptr;
 
-            const auto ops = node->fs_ops->open(node, mode);
-            if (ops == nullptr) return nullptr;
+            if (node->type == NodeType::Directory) return open_dir(node, mode);
+            if (node->type == NodeType::File) return open_file(node, mode);
 
-            if (is_read(mode)) node->open_read++;
-            if (is_write(mode)) node->open_write++;
-
-            const auto file = memory::heap::alloc<File>();
-            file->ops = ops;
-            file->on_close = nullptr;
-            file->node = node;
-            file->mode = mode;
-            file->cursor = 0;
-
-            return file;
+            return nullptr;
         }
 
         return nullptr;
     }
 
-    void close_file(File* file) {
+    void close(File* file) {
         if (file->node != nullptr) {
             if (is_read(file->mode)) file->node->open_read--;
             if (is_write(file->mode)) file->node->open_write--;
@@ -210,52 +290,6 @@ namespace cosmos::vfs {
         }
 
         memory::heap::free(file);
-    }
-
-    struct Dir {
-        Node* node;
-        stl::LinkedList<Node>::Iterator it;
-    };
-
-    void* open_dir(stl::StringView path) {
-        const auto length = check_abs_path(path);
-        if (length == 0) return nullptr;
-        path = path.substr(0, length);
-
-        Node* parent;
-        stl::SplitIterator it;
-        const auto node = find_node(path, parent, it);
-
-        if (node != nullptr && node->type == NodeType::Directory) {
-            if (!node->populated) node->fs_ops->populate(node);
-
-            node->open_read++;
-
-            const auto dir = memory::heap::alloc<Dir>();
-            dir->node = node;
-            dir->it = node->children.begin();
-
-            return dir;
-        }
-
-        return nullptr;
-    }
-
-    stl::StringView read_dir(void* dir) {
-        const auto d = static_cast<Dir*>(dir);
-
-        if (d->it != stl::LinkedList<Node>::end()) {
-            return (d->it++)->name;
-        }
-
-        return { "", 0 };
-    }
-
-    void close_dir(void* dir) {
-        const auto d = static_cast<Dir*>(dir);
-        d->node->open_read--;
-
-        memory::heap::free(d);
     }
 
     bool create_dir(stl::StringView path) {
