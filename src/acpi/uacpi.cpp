@@ -4,7 +4,7 @@
 #include "log/log.hpp"
 #include "memory/virt_range_alloc.hpp"
 #include "memory/virtual.hpp"
-#include "utils.hpp"
+#include "stl/utils.hpp"
 
 extern "C" {
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr* out_rsdp_address) {
@@ -16,7 +16,7 @@ void* uacpi_kernel_map(const uacpi_phys_addr addr, const uacpi_size len) {
     using namespace cosmos::memory::virt;
 
     const auto phys_start = addr / 4096ul;
-    const auto phys_end = cosmos::utils::ceil_div(addr + len, 4096ul);
+    const auto phys_end = stl::ceil_div(addr + len, 4096ul);
     const auto page_count = phys_end - phys_start;
 
     // Allocate virtual range

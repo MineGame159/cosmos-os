@@ -6,7 +6,6 @@
 #include "nanoprintf.h"
 
 #include <cstdarg>
-#include <new>
 
 namespace cosmos::utils {
     void panic_print_regs(const char* r0_name, const uint64_t r0, const char* r1_name, const uint64_t r1, const char* r2_name,

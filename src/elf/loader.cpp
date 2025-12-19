@@ -4,6 +4,7 @@
 #include "memory/offsets.hpp"
 #include "memory/physical.hpp"
 #include "memory/virtual.hpp"
+#include "stl/utils.hpp"
 #include "utils.hpp"
 
 namespace cosmos::elf {
@@ -19,7 +20,7 @@ namespace cosmos::elf {
         const auto end_addr = start_addr + header.virt_size;
 
         const auto virt_start = start_addr / 4096ul;
-        const auto virt_end = utils::ceil_div(end_addr, 4096ul);
+        const auto virt_end = stl::ceil_div(end_addr, 4096ul);
         const auto count = virt_end - virt_start;
 
         if (count == 0) return true;

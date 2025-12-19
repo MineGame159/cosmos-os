@@ -27,31 +27,6 @@ namespace cosmos::utils {
     int32_t str_index_of(const char* str, char ch);
     const char* str_trim_left(const char* str);
 
-    template <typename T>
-    T min(T a, T b) {
-        return a < b ? a : b;
-    }
-
-    template <typename T>
-    T max(T a, T b) {
-        return a > b ? a : b;
-    }
-
-    template <typename T>
-    T ceil_div(T a, T b) {
-        return (a + b - 1) / b;
-    }
-
-    template <typename T>
-    T align_up(T value, T alignment) {
-        return (value + (alignment - 1)) & ~(alignment - 1);
-    }
-
-    template <typename T>
-    T align_down(T value, T alignment) {
-        return value & ~(alignment - 1);
-    }
-
     // MSR
 
     constexpr uint32_t MSR_EFER = 0xC0000080;

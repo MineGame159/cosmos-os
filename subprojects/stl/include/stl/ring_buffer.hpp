@@ -1,5 +1,8 @@
 #pragma once
 
+#include "utils.hpp"
+
+
 #include <cstring>
 #include <type_traits>
 
@@ -90,11 +93,6 @@ namespace stl {
         void reset() {
             write_index = 0;
             read_index = 0;
-        }
-
-      private:
-        static size_t min(const size_t a, const size_t b) {
-            return a < b ? a : b;
         }
     };
 } // namespace stl

@@ -1,11 +1,12 @@
 #pragma once
 
-#include <concepts>
+#include "utils.hpp"
+
 #include <cstddef>
 #include <cstdint>
 
 namespace stl {
-    template <std::equality_comparable T, const size_t N, const T EMPTY>
+    template <Equatable T, const size_t N, const T EMPTY>
     struct FixedList {
         struct Iterator {
             const T* items;

@@ -2,6 +2,7 @@
 
 #include "limine.hpp"
 #include "log/log.hpp"
+#include "stl/utils.hpp"
 #include "utils.hpp"
 
 namespace cosmos::memory::phys {
@@ -28,7 +29,7 @@ namespace cosmos::memory::phys {
 
     void mark_pages(const uint32_t first, uint32_t count, const bool used) {
         if (first >= total_pages) return;
-        count = utils::min(count, total_pages - first);
+        count = stl::min(count, total_pages - first);
 
         auto changed = 0u;
 
@@ -55,10 +56,10 @@ namespace cosmos::memory::phys {
             }
         }
 
-        entry_count = utils::ceil_div(total_pages, 64u);
+        entry_count = stl::ceil_div(total_pages, 64u);
 
         // Find usable range to store entries in
-        const uint32_t entries_page_count = utils::ceil_div(entry_count * 8ul, 4096ul);
+        const uint32_t entries_page_count = stl::ceil_div(entry_count * 8ul, 4096ul);
         uint32_t entries_page_index = 0xFFFFFFFF;
 
         for (auto i = 0u; i < limine::get_memory_range_count(); i++) {

@@ -3,6 +3,7 @@
 #include "memory/heap.hpp"
 #include "stl/linked_list.hpp"
 #include "stl/string_view.hpp"
+#include "stl/utils.hpp"
 #include "types.hpp"
 #include "utils.hpp"
 #include "vfs.hpp"
@@ -46,7 +47,7 @@ namespace cosmos::vfs::ramfs {
         if (file->mode == Mode::Read) return 0;
 
         if (file->cursor + length >= info->data_capacity) {
-            const auto new_capacity = utils::max(info->data_capacity * 2, file->cursor + length);
+            const auto new_capacity = stl::max(info->data_capacity * 2, file->cursor + length);
 
             const auto new_data = memory::heap::alloc_array<uint8_t>(new_capacity);
             if (new_data == nullptr) return 0;

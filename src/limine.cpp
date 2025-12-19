@@ -5,6 +5,8 @@
 
 #include <limine.h>
 
+#include "stl/utils.hpp"
+
 __attribute__((unused, section(".requests_start"))) //
 static volatile uint64_t start_marker[] = LIMINE_REQUESTS_START_MARKER;
 
@@ -138,11 +140,11 @@ namespace cosmos::limine {
         auto end = entry->base + entry->length;
 
         if (type == MemoryType::Usable) {
-            start = utils::align_up(start, 4096ul);
-            end = utils::align_down(end, 4096ul);
+            start = stl::align_up(start, 4096ul);
+            end = stl::align_down(end, 4096ul);
         } else {
-            start = utils::align_down(start, 4096ul);
-            end = utils::align_up(end, 4096ul);
+            start = stl::align_down(start, 4096ul);
+            end = stl::align_up(end, 4096ul);
         }
 
         return {

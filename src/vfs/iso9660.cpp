@@ -3,6 +3,7 @@
 #include "log/log.hpp"
 #include "memory/heap.hpp"
 #include "stl/bit_field.hpp"
+#include "stl/utils.hpp"
 #include "utils.hpp"
 #include "vfs.hpp"
 
@@ -176,7 +177,7 @@ namespace cosmos::vfs::iso9660 {
 
         fs_info->device->ops->seek(fs_info->device, SeekType::Start, static_cast<int64_t>(node_info->data_offset + file->cursor));
 
-        const auto to_read = utils::min(length, node_info->data_size);
+        const auto to_read = stl::min(length, node_info->data_size);
         return fs_info->device->ops->read(fs_info->device, buffer, to_read);
     }
 
@@ -223,7 +224,7 @@ namespace cosmos::vfs::iso9660 {
             const auto entry = reinterpret_cast<DirectoryEntry*>(&entries[i]);
 
             if (entry->length == 0) {
-                i = utils::align_up(i + 1, 2048u);
+                i = stl::align_up(i + 1, 2048u);
                 continue;
             }
 

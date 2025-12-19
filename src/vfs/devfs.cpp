@@ -1,6 +1,7 @@
 #include "devfs.hpp"
 
 #include "nanoprintf.h"
+#include "stl/utils.hpp"
 #include "utils.hpp"
 #include "vfs.hpp"
 
@@ -116,7 +117,7 @@ namespace cosmos::vfs::devfs {
         }
 
         // Read data from buffer
-        auto read = utils::min(seq->buffer.size(), length);
+        auto read = stl::min(seq->buffer.size(), length);
         if (read == 0) return 0;
 
         read = seq->buffer.try_get(static_cast<char*>(buffer), read);
