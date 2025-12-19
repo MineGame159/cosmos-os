@@ -1,5 +1,6 @@
 #include "log/log.hpp"
 #include "memory/offsets.hpp"
+#include "scheduler/event.hpp"
 #include "scheduler/scheduler.hpp"
 #include "vfs/vfs.hpp"
 
@@ -111,6 +112,38 @@ namespace cosmos::syscalls {
         return file->ops->ioctl(file, op, arg);
     }
 
+    int64_t eventfd() {
+        uint32_t fd;
+
+        const auto event_file = scheduler::create_event(nullptr, 0, fd);
+        if (event_file == nullptr) return -1;
+
+        return fd;
+    }
+
+    int64_t poll(const uint64_t fds_, const uint64_t count, const uint64_t reset_signalled_, const uint64_t mask_) {
+        if (memory::virt::is_invalid_user(fds_)) return -1;
+        if (memory::virt::is_invalid_user(fds_ + count * sizeof(uint32_t))) return -1;
+        if (memory::virt::is_invalid_user(mask_)) return -1;
+        if (memory::virt::is_invalid_user(mask_ + sizeof(uint64_t))) return -1;
+
+        if (count > 64) return -1;
+
+        const auto fds = reinterpret_cast<uint32_t*>(fds_);
+        const auto reset_signalled = reset_signalled_ != 0;
+        const auto mask = reinterpret_cast<uint64_t*>(mask_);
+        const auto pid = scheduler::get_current_process();
+
+        vfs::File* event_files[64];
+
+        for (auto i = 0u; i < count; i++) {
+            event_files[i] = scheduler::get_file(pid, fds[i]);
+        }
+
+        *mask = scheduler::wait_on_events(event_files, count, reset_signalled);
+        return 0;
+    }
+
     // Handler
 
     extern "C" void syscall_handler(const uint64_t number, SyscallFrame* frame) {
@@ -152,6 +185,8 @@ namespace cosmos::syscalls {
             CASE_3(5, read)
             CASE_3(6, write)
             CASE_3(7, ioctl)
+            CASE_0(8, eventfd)
+            CASE_4(9, poll)
 
         default:
             ERROR("Invalid syscalls %llu from process %llu", number, scheduler::get_current_process());

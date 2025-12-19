@@ -31,6 +31,7 @@ namespace cosmos::scheduler {
     ProcessId get_current_process();
     State get_process_state(ProcessId id);
 
+    /// Returns 0xFFFFFFFF on failure
     uint32_t add_fd(ProcessId id, vfs::File* file);
     vfs::File* get_file(ProcessId id, uint32_t fd);
     vfs::File* remove_fd(ProcessId id, uint32_t fd);

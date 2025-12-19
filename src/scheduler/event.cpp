@@ -1,60 +1,101 @@
 #include "event.hpp"
 
-#include "memory/heap.hpp"
 #include "private.hpp"
 
 namespace cosmos::scheduler {
-    EventHandle create_event(void (*destroy_fn)(uint64_t data), const uint64_t destroy_data) {
-        const auto event = memory::heap::alloc<Event>();
+    static uint64_t event_seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
+        return 0;
+    }
 
-        event->destroy_fn = destroy_fn;
-        event->destroy_data = destroy_data;
+    static uint64_t event_read(vfs::File* file, void* buffer, const uint64_t length) {
+        if (length != sizeof(uint64_t)) return 0;
+        const auto event = reinterpret_cast<Event*>(file + 1);
 
-        event->signalled = false;
+        if (event->number == 0) {
+            wait_on_events(&file, 1, false);
+        }
+
+        *static_cast<uint64_t*>(buffer) = event->number;
+        event->number = 0;
+
+        return sizeof(uint64_t);
+    }
+
+    static uint64_t event_write(vfs::File* file, const void* buffer, const uint64_t length) {
+        if (length != sizeof(uint64_t)) return 0;
+
+        asm volatile("cli" ::: "memory");
+        const auto event = reinterpret_cast<Event*>(file + 1);
+
+        event->number += *static_cast<const uint64_t*>(buffer);
+        if (event->waiting_process != nullptr) event->waiting_process->event_signalled = true;
+
+        asm volatile("sti" ::: "memory");
+        return sizeof(uint64_t);
+    }
+
+    static uint64_t event_ioctl([[maybe_unused]] vfs::File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+        return vfs::IOCTL_UNKNOWN;
+    }
+
+    static constexpr vfs::FileOps event_ops = {
+        .seek = event_seek,
+        .read = event_read,
+        .write = event_write,
+        .ioctl = event_ioctl,
+    };
+
+    static void event_close(vfs::File* file) {
+        const auto event = reinterpret_cast<Event*>(file + 1);
+
+        if (event->close_fn != nullptr) {
+            event->close_fn(event->close_data);
+        }
+    }
+
+    // Header
+
+    vfs::File* create_event(void (*close_fn)(uint64_t data), const uint64_t close_data, uint32_t& fd) {
+        const auto file = static_cast<vfs::File*>(memory::heap::alloc(sizeof(vfs::File) + sizeof(Event), alignof(vfs::File)));
+
+        if (file == nullptr) {
+            fd = 0xFFFFFFFF;
+            return nullptr;
+        }
+
+        file->ops = &event_ops;
+        file->on_close = event_close;
+        file->node = nullptr;
+        file->mode = vfs::Mode::ReadWrite;
+        file->cursor = 0;
+
+        fd = add_fd(get_current_process(), file);
+
+        if (fd == 0xFFFFFFFF) {
+            memory::heap::free(file);
+            return nullptr;
+        }
+
+        const auto event = reinterpret_cast<Event*>(file + 1);
+
+        event->close_fn = close_fn;
+        event->close_data = close_data;
+        event->number = 0;
         event->waiting_process = nullptr;
 
-        return reinterpret_cast<uint64_t>(event);
+        return file;
     }
 
-    bool destroy_event(const EventHandle handle) {
-        const auto event = reinterpret_cast<Event*>(handle);
-        if (event->waiting_process != nullptr) return false;
-
-        if (event->destroy_fn != nullptr) event->destroy_fn(event->destroy_data);
-        memory::heap::free(event);
-
-        return true;
-    }
-
-    void signal_event(const EventHandle handle) {
-        const auto event = reinterpret_cast<Event*>(handle);
-
-        event->signalled = true;
-        if (event->waiting_process != nullptr) event->waiting_process->event_signalled = true;
-    }
-
-    bool check_event(const EventHandle handle) {
-        const auto event = reinterpret_cast<Event*>(handle);
-        return event->signalled;
-    }
-
-    bool reset_event(const EventHandle handle) {
-        const auto event = reinterpret_cast<Event*>(handle);
-        if (event->waiting_process != nullptr) return false;
-
-        event->signalled = false;
-        return true;
-    }
-
-    uint64_t get_signalled_mask(Event** events, const uint32_t count, const bool reset_signalled) {
+    static uint64_t get_signalled_mask(vfs::File** event_files, const uint32_t count, const bool reset_signalled) {
         uint64_t mask = 0;
 
         for (auto i = 0u; i < count; i++) {
-            const auto event = events[i];
+            if (event_files[i] == nullptr) continue;
+            const auto event = reinterpret_cast<Event*>(event_files[i] + 1);
 
-            if (event->signalled) {
+            if (event->number > 0) {
                 mask |= 1ull << i;
-                if (reset_signalled) event->signalled = false;
+                if (reset_signalled) event->number = 0;
             }
 
             event->waiting_process = nullptr;
@@ -63,16 +104,18 @@ namespace cosmos::scheduler {
         return mask;
     }
 
-    uint64_t wait_on_events(EventHandle* handles, const uint32_t count, const bool reset_signalled) {
+    uint64_t wait_on_events(vfs::File** event_files, uint32_t count, bool reset_signalled) {
         if (count > 64) return 0;
         asm volatile("cli" ::: "memory");
 
         const auto process = reinterpret_cast<Process*>(get_current_process());
-        const auto events = reinterpret_cast<Event**>(handles);
 
         for (auto i = 0u; i < count; i++) {
-            if (events[i]->signalled) {
-                const auto mask = get_signalled_mask(events, count, reset_signalled);
+            if (event_files[i] == nullptr) continue;
+            const auto event = reinterpret_cast<Event*>(event_files[i] + 1);
+
+            if (event->number > 0) {
+                const auto mask = get_signalled_mask(event_files, count, reset_signalled);
 
                 asm volatile("sti" ::: "memory");
                 return mask;
@@ -80,10 +123,13 @@ namespace cosmos::scheduler {
         }
 
         for (auto i = 0u; i < count; i++) {
-            events[i]->waiting_process = process;
+            if (event_files[i] == nullptr) continue;
+            const auto event = reinterpret_cast<Event*>(event_files[i] + 1);
+
+            event->waiting_process = process;
         }
 
-        process->events = events;
+        process->event_files = event_files;
         process->event_count = count;
         process->event_signalled = false;
 
@@ -91,7 +137,7 @@ namespace cosmos::scheduler {
         yield();
         asm volatile("cli" ::: "memory");
 
-        const auto mask = get_signalled_mask(events, count, reset_signalled);
+        const auto mask = get_signalled_mask(event_files, count, reset_signalled);
 
         asm volatile("sti" ::: "memory");
         return mask;

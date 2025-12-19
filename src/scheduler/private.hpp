@@ -20,7 +20,7 @@ namespace cosmos::scheduler {
 
         uint64_t user_stack_phys;
 
-        Event** events;
+        vfs::File** event_files;
         uint32_t event_count;
         bool event_signalled;
 
@@ -28,10 +28,10 @@ namespace cosmos::scheduler {
     };
 
     struct Event {
-        void (*destroy_fn)(uint64_t data);
-        uint64_t destroy_data;
+        void (*close_fn)(uint64_t data);
+        uint64_t close_data;
 
-        bool signalled;
+        uint64_t number;
         Process* waiting_process;
     };
 } // namespace cosmos::scheduler

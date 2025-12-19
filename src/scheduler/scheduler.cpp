@@ -108,7 +108,7 @@ namespace cosmos::scheduler {
 
         process->space = space;
 
-        process->events = nullptr;
+        process->event_files = nullptr;
         process->event_count = 0;
         process->event_signalled = false;
 
@@ -248,7 +248,13 @@ namespace cosmos::scheduler {
         const auto process = reinterpret_cast<Process*>(id);
 
         const auto index = process->fd_table.add(file);
-        return index == -1 ? 0xFFFFFFFF : index;
+
+        if (index == -1) {
+            ERROR("Failed to add file descriptor, table full for process %llu", id);
+            return 0xFFFFFFFF;
+        }
+
+        return index;
     }
 
     vfs::File* get_file(const ProcessId id, const uint32_t fd) {
@@ -260,7 +266,10 @@ namespace cosmos::scheduler {
     vfs::File* remove_fd(const ProcessId id, const uint32_t fd) {
         const auto process = reinterpret_cast<Process*>(id);
 
-        return process->fd_table.remove_at(fd);
+        const auto file = process->fd_table.remove_at(fd);
+        if (file == nullptr) ERROR("Failed to remove file descriptor %lu from process %llu", fd, id);
+
+        return file;
     }
 
     void move_next() {

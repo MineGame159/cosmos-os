@@ -185,6 +185,7 @@ namespace cosmos::vfs {
 
             const auto file = memory::heap::alloc<File>();
             file->ops = ops;
+            file->on_close = nullptr;
             file->node = node;
             file->mode = mode;
             file->cursor = 0;
@@ -196,10 +197,17 @@ namespace cosmos::vfs {
     }
 
     void close_file(File* file) {
-        if (is_read(file->mode)) file->node->open_read--;
-        if (is_write(file->mode)) file->node->open_write--;
+        if (file->node != nullptr) {
+            if (is_read(file->mode)) file->node->open_read--;
+            if (is_write(file->mode)) file->node->open_write--;
 
-        file->node->fs_ops->on_close(file);
+            file->node->fs_ops->on_close(file);
+        }
+
+        if (file->on_close != nullptr) {
+            file->on_close(file);
+        }
+
         memory::heap::free(file);
     }
 

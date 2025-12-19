@@ -1,19 +1,20 @@
 #include "keyboard.hpp"
 
 #include "scheduler/event.hpp"
+#include "scheduler/scheduler.hpp"
 #include "stl/fixed_list.hpp"
 #include "stl/ring_buffer.hpp"
 #include "vfs/devfs.hpp"
 
 namespace cosmos::devices::keyboard {
     static stl::RingBuffer<Event, 32> events = {};
-    static stl::FixedList<scheduler::EventHandle, 8, 0> event_handles = {};
+    static stl::FixedList<vfs::File*, 8, nullptr> event_files = {};
 
-    uint64_t kb_seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
+    static uint64_t kb_seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
         return 0;
     }
 
-    uint64_t kb_read(vfs::File* file, void* buffer, const uint64_t length) {
+    static uint64_t kb_read(vfs::File* file, void* buffer, const uint64_t length) {
         if (length != sizeof(Event)) return 0;
 
         asm volatile("cli" ::: "memory");
@@ -30,29 +31,34 @@ namespace cosmos::devices::keyboard {
         return 0;
     }
 
-    void event_destroy(const uint64_t data) {
+    static void event_close(const uint64_t index) {
         asm volatile("cli" ::: "memory");
-        event_handles.remove_at(data);
+        event_files.remove_at(index);
         asm volatile("sti" ::: "memory");
     }
 
-    uint64_t kb_ioctl([[maybe_unused]] vfs::File* file, const uint64_t op, [[maybe_unused]] uint64_t arg) {
+    static uint64_t kb_ioctl([[maybe_unused]] vfs::File* file, const uint64_t op, [[maybe_unused]] uint64_t arg) {
         switch (op) {
         case IOCTL_CREATE_EVENT: {
             asm volatile("cli" ::: "memory");
 
-            scheduler::EventHandle* handle;
-            size_t handle_index;
+            vfs::File** event_file;
+            size_t event_file_index;
 
-            if (!event_handles.try_add(handle, handle_index)) {
+            if (!event_files.try_add(event_file, event_file_index)) {
                 asm volatile("sti" ::: "memory");
                 return 0;
             }
 
-            *handle = scheduler::create_event(event_destroy, handle_index);
+            uint32_t fd;
+            *event_file = scheduler::create_event(event_close, event_file_index, fd);
+
+            if (*event_file == nullptr) {
+                event_files.remove_at(event_file_index);
+            }
 
             asm volatile("sti" ::: "memory");
-            return *handle;
+            return fd;
         }
         case IOCTL_RESET_BUFFER: {
             asm volatile("cli" ::: "memory");
@@ -81,8 +87,9 @@ namespace cosmos::devices::keyboard {
 
     void add_event(const Event event) {
         if (events.add(event)) {
-            for (const auto handle : event_handles) {
-                scheduler::signal_event(handle);
+            for (const auto event_file : event_files) {
+                constexpr uint64_t number = 1;
+                event_file->ops->write(event_file, &number, sizeof(uint64_t));
             }
         }
     }

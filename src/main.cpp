@@ -32,7 +32,6 @@ using namespace cosmos;
 void init() {
     acpi::init();
 
-    devices::pit::start();
     if (!devices::ps2kbd::init()) utils::halt();
 
     vfs::ramfs::register_filesystem();
@@ -43,6 +42,7 @@ void init() {
     const auto devfs = vfs::mount("/dev", "devfs", "");
 
     log::init_devfs(devfs);
+    devices::pit::init(devfs);
     devices::framebuffer::init(devfs);
     devices::keyboard::init(devfs);
     devices::atapio::init(devfs);

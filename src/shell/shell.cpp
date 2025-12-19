@@ -7,6 +7,7 @@
 #include "limine.hpp"
 #include "memory/heap.hpp"
 #include "nanoprintf.h"
+#include "scheduler/event.hpp"
 #include "scheduler/scheduler.hpp"
 #include "utils.hpp"
 #include "vfs/path.hpp"
@@ -26,7 +27,7 @@ namespace cosmos::shell {
 
     static Color fg_color;
 
-    static scheduler::EventHandle cursor_blink_event;
+    static uint32_t cursor_blink_event_fd;
 
     static bool caps_lock = false;
     static bool shift = false;
@@ -136,7 +137,9 @@ namespace cosmos::shell {
 
         fg_color = WHITE;
 
-        cursor_blink_event = devices::pit::create_timer(500);
+        const auto timer_file = vfs::open_file("/dev/timer", vfs::Mode::Read);
+        cursor_blink_event_fd = timer_file->ops->ioctl(timer_file, devices::pit::IOCTL_CREATE_EVENT, 500);
+        vfs::close_file(timer_file);
 
         // Clear screen
         const auto line_pixels = memory::heap::alloc_array<uint32_t>(pitch);
@@ -332,7 +335,11 @@ namespace cosmos::shell {
         using namespace devices::keyboard;
 
         const auto kbdev = vfs::open_file("/dev/keyboard", vfs::Mode::Read);
-        const auto kb_event = kbdev->ops->ioctl(kbdev, IOCTL_CREATE_EVENT, 0);
+
+        const auto kb_event_fd = kbdev->ops->ioctl(kbdev, IOCTL_CREATE_EVENT, 0);
+        const auto kb_event_file = scheduler::get_file(scheduler::get_current_process(), kb_event_fd);
+        const auto cursor_blink_event_file = scheduler::get_file(scheduler::get_current_process(), cursor_blink_event_fd);
+
         kbdev->ops->ioctl(kbdev, IOCTL_RESET_BUFFER, 0);
 
         auto size = 0u;
@@ -340,8 +347,8 @@ namespace cosmos::shell {
         for (;;) {
             fill_cell(cursor_visible ? 0xFFFFFFFF : 0xFF000000);
 
-            scheduler::EventHandle handles[] = { cursor_blink_event, kb_event };
-            const auto signalled = scheduler::wait_on_events(handles, 2, true);
+            vfs::File* event_files[] = { cursor_blink_event_file, kb_event_file };
+            const auto signalled = scheduler::wait_on_events(event_files, 2, true);
 
             if (signalled & 0b01) {
                 cursor_visible = !cursor_visible;
@@ -386,7 +393,8 @@ namespace cosmos::shell {
             }
         }
 
-        scheduler::destroy_event(kb_event);
+        scheduler::remove_fd(scheduler::get_current_process(), kb_event_fd);
+        vfs::close_file(kb_event_file);
         vfs::close_file(kbdev);
 
         if (cursor_visible) fill_cell(0xFF000000);

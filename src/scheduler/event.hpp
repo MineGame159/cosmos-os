@@ -1,16 +1,9 @@
 #pragma once
-
-#include <cstdint>
+#include "vfs/types.hpp"
 
 namespace cosmos::scheduler {
-    using EventHandle = uint64_t;
+    /// Returns nullptr on failure and fd is set to 0xFFFFFFFF
+    vfs::File* create_event(void (*close_fn)(uint64_t data), uint64_t close_data, uint32_t& fd);
 
-    EventHandle create_event(void (*destroy_fn)(uint64_t data), uint64_t destroy_data);
-    bool destroy_event(EventHandle handle);
-
-    void signal_event(EventHandle handle);
-    bool check_event(EventHandle handle);
-    bool reset_event(EventHandle handle);
-
-    uint64_t wait_on_events(EventHandle* handles, uint32_t count, bool reset_signalled);
+    uint64_t wait_on_events(vfs::File** event_files, uint32_t count, bool reset_signalled);
 } // namespace cosmos::scheduler

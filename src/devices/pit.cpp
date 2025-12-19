@@ -1,8 +1,11 @@
 #include "pit.hpp"
 
 #include "interrupts/isr.hpp"
+#include "scheduler/event.hpp"
+#include "scheduler/scheduler.hpp"
 #include "stl/fixed_list.hpp"
 #include "utils.hpp"
+#include "vfs/devfs.hpp"
 
 namespace cosmos::devices::pit {
     struct Repeat {
@@ -24,7 +27,7 @@ namespace cosmos::devices::pit {
 
     static stl::FixedList<Repeat, 8, {}> repeats = {};
 
-    void tick([[maybe_unused]] isr::InterruptInfo* info) {
+    static void tick([[maybe_unused]] isr::InterruptInfo* info) {
         ticks++;
 
         for (const auto& repeat : repeats) {
@@ -34,7 +37,65 @@ namespace cosmos::devices::pit {
         }
     }
 
-    void start() {
+    // VFS
+
+    static uint64_t seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
+        return 0;
+    }
+
+    static uint64_t read([[maybe_unused]] vfs::File* file, void* buffer, const uint64_t length) {
+        if (length != sizeof(uint64_t)) return 0;
+
+        *static_cast<uint64_t*>(buffer) = ticks;
+        return sizeof(uint64_t);
+    }
+
+    static void event_close(const uint64_t index) {
+        asm volatile("cli" ::: "memory");
+        repeats.remove_at(index);
+        asm volatile("sti" ::: "memory");
+    }
+
+    static void event_tick(const uint64_t event_file_ptr) {
+        const auto event_file = reinterpret_cast<vfs::File*>(event_file_ptr);
+
+        constexpr uint64_t number = 1;
+        event_file->ops->write(event_file, &number, sizeof(uint64_t));
+    }
+
+    static uint64_t ioctl([[maybe_unused]] vfs::File* file, const uint64_t op, const uint64_t arg) {
+        switch (op) {
+        case IOCTL_CREATE_EVENT: {
+            const auto index = repeats.index_of({});
+            if (index == -1) return 0;
+
+            uint32_t fd;
+            const auto event_file = scheduler::create_event(event_close, index, fd);
+
+            if (event_file == nullptr) {
+                return fd;
+            }
+
+            run_every_x_ms(arg, event_tick, reinterpret_cast<uint64_t>(event_file));
+
+            return fd;
+        }
+
+        default:
+            return vfs::IOCTL_UNKNOWN;
+        }
+    }
+
+    static constexpr vfs::FileOps ops = {
+        .seek = seek,
+        .read = read,
+        .write = nullptr,
+        .ioctl = ioctl,
+    };
+
+    // Header
+
+    void init(vfs::Node* node) {
         asm volatile("cli" ::: "memory");
         utils::byte_out(COMMAND, 0b00'11'011'0);
 
@@ -44,6 +105,8 @@ namespace cosmos::devices::pit {
 
         isr::set(0, tick);
         asm volatile("sti" ::: "memory");
+
+        vfs::devfs::register_device(node, "timer", &ops, nullptr);
     }
 
     bool run_every_x_ms(const uint64_t ms, const HandlerFn fn, const uint64_t data) {
@@ -58,25 +121,5 @@ namespace cosmos::devices::pit {
         asm volatile("sti" ::: "memory");
 
         return result;
-    }
-
-    void timer_destroy(const uint64_t data) {
-        asm volatile("cli" ::: "memory");
-        repeats.remove_at(data);
-        asm volatile("sti" ::: "memory");
-    }
-
-    void timer_tick(const uint64_t event) {
-        scheduler::signal_event(event);
-    }
-
-    scheduler::EventHandle create_timer(const uint64_t ms) {
-        const auto index = repeats.index_of({});
-        if (index == -1) return 0;
-
-        const auto event = scheduler::create_event(timer_destroy, index);
-        run_every_x_ms(ms, timer_tick, event);
-
-        return event;
     }
 } // namespace cosmos::devices::pit
