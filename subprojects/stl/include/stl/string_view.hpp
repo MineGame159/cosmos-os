@@ -15,12 +15,13 @@
 #pragma once
 
 #include "ctype.hpp"
+
 #include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 
-namespace cosmos::stl {
+namespace stl {
     struct StringView {
       private:
         const char* data_ = nullptr;
@@ -301,4 +302,4 @@ namespace cosmos::stl {
         return SplitIterator{ str, ch, str.substr(0, 0) };
     }
 
-} // namespace cosmos::stl
+} // namespace stl

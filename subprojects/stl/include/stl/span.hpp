@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-namespace cosmos::stl {
+namespace stl {
     template <typename T>
     struct Span {
         const T* data;
@@ -29,4 +29,4 @@ namespace cosmos::stl {
             return data + size;
         }
     };
-} // namespace cosmos::stl
+} // namespace stl

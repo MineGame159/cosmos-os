@@ -6,6 +6,7 @@
 #include "nanoprintf.h"
 
 #include <cstdarg>
+#include <new>
 
 namespace cosmos::utils {
     void panic_print_regs(const char* r0_name, const uint64_t r0, const char* r1_name, const uint64_t r1, const char* r2_name,
@@ -235,6 +236,8 @@ namespace cosmos::utils {
 } // namespace cosmos::utils
 
 extern "C" {
+// mem...
+
 void* memset(void* dest, const int ch, const std::size_t count) {
     cosmos::utils::memset(dest, ch, count);
     return dest;
@@ -248,5 +251,15 @@ void* memcpy(void* dest, const void* src, const std::size_t count) {
 
 int memcmp(const void* lhs, const void* rhs, const std::size_t size) {
     return cosmos::utils::memcmp(lhs, rhs, size);
+}
+
+// alloc, free
+
+void* aligned_alloc(const size_t size, const size_t alignment) {
+    return cosmos::memory::heap::alloc(size, alignment);
+}
+
+void free(void* ptr) {
+    cosmos::memory::heap::free(ptr);
 }
 }

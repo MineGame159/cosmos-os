@@ -1,5 +1,6 @@
 #include "event.hpp"
 
+#include "memory/heap.hpp"
 #include "private.hpp"
 
 namespace cosmos::scheduler {

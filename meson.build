@@ -70,6 +70,9 @@ cpp_args = [
     '-fno-exceptions', '-fno-rtti',
 ]
 
+stl_proj = subproject('stl')
+stl_dep = stl_proj.get_variable('stl_dep')
+
 uacpi = subproject('uacpi')
 sources += uacpi.get_variable('sources')
 includes += uacpi.get_variable('includes')
@@ -83,6 +86,7 @@ executable(
     'cosmos-os',
     sources,
     include_directories : includes,
+    dependencies : [stl_dep],
     c_args : c_args,
     cpp_args : c_args + cpp_args,
     pie : false,

@@ -1,8 +1,11 @@
 #pragma once
 
-#include "memory/heap.hpp"
+#include "mem.hpp"
 
-namespace cosmos::stl {
+
+#include <cstddef>
+
+namespace stl {
     template <typename T>
     struct LinkedList {
         struct Node {
@@ -53,8 +56,8 @@ namespace cosmos::stl {
             return head != nullptr && head == tail;
         }
 
-        T* push_back_alloc(const std::size_t additional_size = 0) {
-            const auto node = static_cast<Node*>(memory::heap::alloc(sizeof(Node) + additional_size, alignof(Node)));
+        T* push_back_alloc(const size_t additional_size = 0) {
+            const auto node = static_cast<Node*>(aligned_alloc(sizeof(Node) + additional_size, alignof(Node)));
 
             if (head == nullptr) {
                 head = node;
@@ -68,8 +71,8 @@ namespace cosmos::stl {
             return &node->item;
         }
 
-        T* insert_after_alloc(Node* current, const std::size_t additional_size = 0) {
-            const auto node = static_cast<Node*>(memory::heap::alloc(sizeof(Node) + additional_size, alignof(Node)));
+        T* insert_after_alloc(Node* current, const size_t additional_size = 0) {
+            const auto node = static_cast<Node*>(aligned_alloc(sizeof(Node) + additional_size, alignof(Node)));
 
             node->next = current->next;
             current->next = node;
@@ -81,7 +84,7 @@ namespace cosmos::stl {
             return &node->item;
         }
 
-        T* insert_after_alloc(Iterator& it, const std::size_t additional_size = 0) {
+        T* insert_after_alloc(Iterator& it, const size_t additional_size = 0) {
             return insert_after_alloc(it.node, additional_size);
         }
 
@@ -97,7 +100,7 @@ namespace cosmos::stl {
                 tail = prev;
             }
 
-            memory::heap::free(current);
+            free(current);
         }
 
         void remove_free(Iterator& it) {
@@ -125,4 +128,4 @@ namespace cosmos::stl {
             return { nullptr, nullptr };
         }
     };
-} // namespace cosmos::stl
+} // namespace stl

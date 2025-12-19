@@ -2,7 +2,6 @@
 
 #include "stl/string_view.hpp"
 
-
 #include <cstdint>
 
 namespace cosmos::vfs {

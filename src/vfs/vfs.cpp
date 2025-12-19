@@ -1,6 +1,7 @@
 #include "vfs.hpp"
 
 #include "log/log.hpp"
+#include "memory/heap.hpp"
 #include "path.hpp"
 #include "utils.hpp"
 

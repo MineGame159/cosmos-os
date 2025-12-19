@@ -1,6 +1,7 @@
 #include "iso9660.hpp"
 
 #include "log/log.hpp"
+#include "memory/heap.hpp"
 #include "stl/bit_field.hpp"
 #include "utils.hpp"
 #include "vfs.hpp"

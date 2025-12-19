@@ -1,6 +1,7 @@
 #include "parser.hpp"
 
 #include "log/log.hpp"
+#include "memory/heap.hpp"
 
 namespace cosmos::elf {
     enum class Class : uint8_t {

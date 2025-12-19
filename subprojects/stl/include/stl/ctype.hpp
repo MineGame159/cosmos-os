@@ -10,7 +10,7 @@
 
 #pragma once
 
-namespace cosmos::stl {
+namespace stl {
     [[nodiscard]]
     constexpr bool is_alnum(const char c) noexcept {
         const auto uc = static_cast<unsigned char>(c);
@@ -105,4 +105,4 @@ namespace cosmos::stl {
         }
         return c;
     }
-} // namespace cosmos::stl
+} // namespace stl
