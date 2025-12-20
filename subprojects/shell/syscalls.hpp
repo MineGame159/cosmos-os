@@ -14,6 +14,8 @@ enum class Sys : int64_t {
     Ioctl = 8,
     Eventfd = 9,
     Poll = 10,
+    GetCwd = 11,
+    SetCwd = 12,
 };
 
 template <const Sys S>

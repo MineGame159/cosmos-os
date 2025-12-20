@@ -46,15 +46,28 @@ namespace cosmos::devices::framebuffer {
         return size;
     }
 
-    uint64_t fb_ioctl([[maybe_unused]] vfs::File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
-        return vfs::IOCTL_UNKNOWN;
+    uint64_t fb_ioctl([[maybe_unused]] vfs::File* file, const uint64_t op, [[maybe_unused]] uint64_t arg) {
+        switch (op) {
+        case IOCTL_GET_INFO: {
+            const auto fb = limine::get_framebuffer();
+
+            const auto width = static_cast<uint64_t>(fb.width & 0xFFFF);
+            const auto height = static_cast<uint64_t>(fb.height & 0xFFFF);
+            const auto pitch = static_cast<uint64_t>(fb.pitch & 0xFFFF);
+
+            return width | (height << 16) | (pitch << 32);
+        }
+
+        default:
+            return vfs::IOCTL_UNKNOWN;
+        }
     }
 
     static constexpr vfs::FileOps fb_ops = {
         .seek = fb_seek,
         .read = fb_read,
         .write = fb_write,
-        .ioctl = nullptr,
+        .ioctl = fb_ioctl,
     };
 
     void init(vfs::Node* node) {

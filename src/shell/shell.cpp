@@ -1,16 +1,15 @@
 #include "shell.hpp"
 
 #include "commands.hpp"
+#include "devices/framebuffer.hpp"
 #include "devices/keyboard.hpp"
 #include "devices/pit.hpp"
 #include "font.hpp"
-#include "limine.hpp"
 #include "memory/heap.hpp"
 #include "nanoprintf.h"
 #include "scheduler/event.hpp"
 #include "scheduler/scheduler.hpp"
 #include "utils.hpp"
-#include "vfs/path.hpp"
 #include "vfs/vfs.hpp"
 
 #include <cstdint>
@@ -32,50 +31,16 @@ namespace cosmos::shell {
     static bool caps_lock = false;
     static bool shift = false;
 
-    // Shell-owned CWD string. Always an absolute path.
-    // If heap_allocated is true then cwd points to heap memory that must be freed when replaced.
-    // Otherwise, it points to static "/".
-    static char* cwd = nullptr;
-    static bool cwd_heap_allocated = false;
-
-    const char* get_cwd() {
-        if (cwd == nullptr) return "/";
-        return cwd;
-    }
-
-    bool set_cwd(const char* absolute_path) {
-        if (absolute_path == nullptr) return false;
-
-        const auto len = vfs::check_abs_path(absolute_path);
-        if (len == 0) return false;
-
-        auto* copy = memory::heap::alloc_array<char>(len + 1);
-        utils::memcpy(copy, absolute_path, len);
-        copy[len] = '\0';
-
-        if (cwd_heap_allocated && cwd != nullptr) {
-            memory::heap::free(cwd);
-        }
-
-        cwd = copy;
-        cwd_heap_allocated = true;
-        return true;
-    }
-
     // Print the interactive prompt with a colored, bracketed and shortened cwd.
     static void print_prompt() {
         constexpr auto MAX_PROMPT_LEN = 32u;
         char buf[64];
 
-        const auto cwd_str = get_cwd();
-        const auto cwd_len = utils::strlen(cwd_str);
+        const auto cwd = scheduler::get_cwd(scheduler::get_current_process());
 
-        if (cwd_len <= MAX_PROMPT_LEN) {
-            utils::memcpy(buf, cwd_str, cwd_len);
-            buf[cwd_len] = '\0';
-
+        if (cwd.size() <= MAX_PROMPT_LEN) {
             print(DARK_CYAN, "[");
-            print(CYAN, buf);
+            print(CYAN, cwd.data());
             print(DARK_CYAN, "]");
             print(WHITE, " > ");
             return;
@@ -83,9 +48,9 @@ namespace cosmos::shell {
 
         // shorten with ellipsis, keep trailing segments up to MAX_PROMPT_LEN
         uint32_t take = 0;
-        for (auto i = cwd_len; i > 0 && take < MAX_PROMPT_LEN - 5;) {
+        for (auto i = cwd.size(); i > 0 && take < MAX_PROMPT_LEN - 5;) {
             auto j = i;
-            while (j > 0 && cwd_str[j - 1] != '/') {
+            while (j > 0 && cwd[j - 1] != '/') {
                 j--;
             }
             const auto seg_len = i - j;
@@ -101,7 +66,7 @@ namespace cosmos::shell {
             take = MAX_PROMPT_LEN - 5;
         }
 
-        const auto start = (cwd_len > take) ? (cwd_len - take) : 0;
+        const auto start = (cwd.size() > take) ? (cwd.size() - take) : 0;
 
         // build inner as "/...<trailing>"
         buf[0] = '/';
@@ -109,13 +74,13 @@ namespace cosmos::shell {
         buf[2] = '.';
         buf[3] = '.';
 
-        const auto copy_len = cwd_len - start;
+        const auto copy_len = cwd.size() - start;
         if (copy_len + 4 >= sizeof(buf) - 1) {
-            const auto allowed = sizeof(buf) - 1 - 4;
-            utils::memcpy(&buf[4], &cwd_str[cwd_len - allowed], allowed);
+            constexpr auto allowed = sizeof(buf) - 1 - 4;
+            utils::memcpy(&buf[4], &cwd[cwd.size() - allowed], allowed);
             buf[4 + allowed] = '\0';
         } else {
-            utils::memcpy(&buf[4], &cwd_str[start], copy_len);
+            utils::memcpy(&buf[4], &cwd[start], copy_len);
             buf[4 + copy_len] = '\0';
         }
 
@@ -128,12 +93,15 @@ namespace cosmos::shell {
     void fill_cell(uint32_t pixel);
 
     void run() {
-        const auto fb = limine::get_framebuffer();
-
         fbdev = vfs::open("/dev/framebuffer", vfs::Mode::ReadWrite);
-        pitch = fb.pitch;
-        columns = fb.width / FONT_WIDTH;
-        rows = fb.height / FONT_HEIGHT;
+
+        const auto info = fbdev->ops->ioctl(fbdev, devices::framebuffer::IOCTL_GET_INFO, 0);
+        const auto width = (info >> 0) & 0xFFFF;
+        const auto height = (info >> 16) & 0xFFFF;
+        pitch = (info >> 32) & 0xFFFF;
+
+        columns = width / FONT_WIDTH;
+        rows = height / FONT_HEIGHT;
 
         fg_color = WHITE;
 
@@ -144,21 +112,18 @@ namespace cosmos::shell {
         // Clear screen
         const auto line_pixels = memory::heap::alloc_array<uint32_t>(pitch);
 
-        for (auto x = 0u; x < fb.width; x++) {
+        for (auto x = 0u; x < width; x++) {
             line_pixels[x] = 0xFF000000;
         }
 
-        for (auto y = 0u; y < fb.height; y++) {
+        for (auto y = 0u; y < height; y++) {
             fbdev->ops->seek(fbdev, vfs::SeekType::Start, y * pitch * 4);
             fbdev->ops->write(fbdev, line_pixels, pitch * 4);
         }
 
         memory::heap::free(line_pixels);
 
-        // Initialize cwd to root
-        cwd = const_cast<char*>("/");
-        cwd_heap_allocated = false;
-
+        // Run
         for (;;) {
             print_prompt();
 

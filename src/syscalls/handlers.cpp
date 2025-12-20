@@ -1,7 +1,10 @@
 #include "log/log.hpp"
+#include "memory/heap.hpp"
 #include "memory/offsets.hpp"
 #include "scheduler/event.hpp"
 #include "scheduler/scheduler.hpp"
+#include "utils.hpp"
+#include "vfs/path.hpp"
 #include "vfs/vfs.hpp"
 
 #include <cstdint>
@@ -14,7 +17,7 @@ struct SyscallFrame {
 namespace cosmos::syscalls {
     // Helpers
 
-    stl::StringView get_string_view(const uint64_t arg) {
+    static stl::StringView get_string_view(const uint64_t arg) {
         const auto ptr = reinterpret_cast<const char*>(arg);
         size_t length = 0;
 
@@ -25,6 +28,10 @@ namespace cosmos::syscalls {
         }
 
         return stl::StringView(ptr, length);
+    }
+
+    static void free_string(const stl::StringView str) {
+        memory::heap::free(const_cast<char*>(str.data()));
     }
 
     // Syscall handlers
@@ -45,8 +52,12 @@ namespace cosmos::syscalls {
 
         const auto path = get_string_view(path_);
         const auto stat = reinterpret_cast<vfs::Stat*>(stat_);
+        const auto pid = scheduler::get_current_process();
 
-        const auto result = vfs::stat(path, *stat);
+        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+        const auto result = vfs::stat(abs_path, *stat);
+
+        free_string(abs_path);
         return result ? 0 : -1;
     }
 
@@ -55,15 +66,22 @@ namespace cosmos::syscalls {
         const auto mode = static_cast<vfs::Mode>(mode_);
         const auto pid = scheduler::get_current_process();
 
+        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+
         const auto file = vfs::open(path, mode);
-        if (file == nullptr) return -1;
+        if (file == nullptr) {
+            free_string(abs_path);
+            return -1;
+        }
 
         const auto fd = scheduler::add_fd(pid, file);
         if (fd == 0xFFFFFFFF) {
             vfs::close(file);
+            free_string(abs_path);
             return -1;
         }
 
+        free_string(abs_path);
         return fd;
     }
 
@@ -155,6 +173,33 @@ namespace cosmos::syscalls {
         return 0;
     }
 
+    int64_t get_cwd(const uint64_t buffer_, const uint64_t length) {
+        if (memory::virt::is_invalid_user(buffer_)) return -1;
+        if (memory::virt::is_invalid_user(buffer_ + length - 1)) return -1;
+
+        const auto buffer = reinterpret_cast<char*>(buffer_);
+        const auto pid = scheduler::get_current_process();
+
+        const auto cwd = scheduler::get_cwd(pid);
+        if (length < cwd.size() + 1) return -1;
+
+        utils::memcpy(buffer, cwd.data(), cwd.size());
+        buffer[cwd.size()] = '\0';
+
+        return cwd.size();
+    }
+
+    int64_t set_cwd(const uint64_t path_) {
+        const auto pid = scheduler::get_current_process();
+        const auto path = get_string_view(path_);
+
+        vfs::Stat stat;
+        if (!vfs::stat(path, stat) || stat.type != vfs::NodeType::Directory) return -1;
+
+        scheduler::set_cwd(pid, path);
+        return 0;
+    }
+
     // Handler
 
     extern "C" void syscall_handler(const uint64_t number, SyscallFrame* frame) {
@@ -199,6 +244,8 @@ namespace cosmos::syscalls {
             CASE_3(8, ioctl)
             CASE_0(9, eventfd)
             CASE_4(10, poll)
+            CASE_2(11, get_cwd)
+            CASE_1(12, set_cwd)
 
         default:
             ERROR("Invalid syscalls %llu from process %llu", number, scheduler::get_current_process());

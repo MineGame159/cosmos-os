@@ -77,6 +77,7 @@ namespace cosmos::scheduler {
     }
 
     void delete_process(const Process* process, stl::LinkedList<Process>::Iterator* it_ptr) {
+        memory::heap::free(const_cast<char*>(process->cwd.data()));
         memory::virt::destroy(process->space);
         memory::heap::free(process->kernel_stack);
 
@@ -96,7 +97,7 @@ namespace cosmos::scheduler {
         asm volatile("iretq");
     }
 
-    ProcessId create_process(const ProcessFn fn, const memory::virt::Space space, const Land land) {
+    ProcessId create_process(const ProcessFn fn, const memory::virt::Space space, const Land land, const stl::StringView cwd) {
         const auto process = processes.push_back_alloc();
 
         // Set basic fields
@@ -179,20 +180,24 @@ namespace cosmos::scheduler {
 
         process->kernel_stack_rsp = reinterpret_cast<uint64_t>(stack);
 
+        // Set cwd
+        process->cwd = stl::StringView("", 0);
+        set_cwd(reinterpret_cast<ProcessId>(process), cwd);
+
         return reinterpret_cast<ProcessId>(process);
     }
 
-    ProcessId create_process(const ProcessFn fn, const Land land) {
+    ProcessId create_process(const ProcessFn fn, const Land land, const stl::StringView cwd) {
         const auto space = memory::virt::create();
         if (space == 0) return 0;
 
-        const auto id = create_process(fn, space, land);
+        const auto id = create_process(fn, space, land, cwd);
         if (id == 0) memory::virt::destroy(space);
 
         return id;
     }
 
-    ProcessId create_process(const stl::StringView path) {
+    ProcessId create_process(const stl::StringView path, const stl::StringView cwd) {
         // Open file
         const auto file = vfs::open(path, vfs::Mode::Read);
 
@@ -210,7 +215,7 @@ namespace cosmos::scheduler {
         }
 
         // Create process
-        const auto id = create_process(reinterpret_cast<ProcessFn>(binary->virt_entry), Land::User);
+        const auto id = create_process(reinterpret_cast<ProcessFn>(binary->virt_entry), Land::User, cwd);
 
         if (id == 0) {
             memory::heap::free(binary);
@@ -242,6 +247,25 @@ namespace cosmos::scheduler {
 
     State get_process_state(const ProcessId id) {
         return reinterpret_cast<Process*>(id)->state;
+    }
+
+    stl::StringView get_cwd(const ProcessId id) {
+        return reinterpret_cast<Process*>(id)->cwd;
+    }
+
+    void set_cwd(const ProcessId id, const stl::StringView path) {
+        if (path.empty()) return;
+
+        const auto process = reinterpret_cast<Process*>(id);
+        const auto old_cwd = process->cwd;
+
+        const auto cwd = memory::heap::alloc_array<char>(path.size() + 1);
+        process->cwd = stl::StringView(cwd, path.size());
+
+        utils::memcpy(cwd, path.data(), path.size());
+        cwd[path.size()] = '\0';
+
+        if (!old_cwd.empty()) memory::heap::free(const_cast<char*>(old_cwd.data()));
     }
 
     uint32_t add_fd(const ProcessId id, vfs::File* file) {

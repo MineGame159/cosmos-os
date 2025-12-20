@@ -7,17 +7,10 @@
 namespace cosmos::vfs {
     uint32_t check_abs_path(stl::StringView path);
 
-    struct PathEntryIt {
-        const char* entry;
-        uint32_t length;
+    // Returns a heap-allocated path (caller must free with memory::heap::free)
+    stl::StringView join(stl::StringView a, stl::StringView b);
 
-        bool next();
-    };
-
-    PathEntryIt iterate_path_entries(const char* path);
-
-    // Resolve a possibly-relative path against a current working directory.
-    // Returns a heap-allocated absolute path (caller must free with memory::heap::free).
-    // On error (invalid path, attempts to escape root, etc.) returns nullptr.
-    char* resolve_path(const char* cwd, const char* path);
+    /// Returns a heap-allocated absolute path (caller must free with memory::heap::free)
+    /// On error (invalid path, attempts to escape root, etc.) empty string (still needs to be freed).
+    stl::StringView resolve(stl::StringView cwd, stl::StringView path);
 } // namespace cosmos::vfs

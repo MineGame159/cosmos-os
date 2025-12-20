@@ -24,12 +24,15 @@ namespace cosmos::scheduler {
 
     using ProcessId = uint64_t;
 
-    ProcessId create_process(ProcessFn fn, memory::virt::Space space, Land land);
-    ProcessId create_process(ProcessFn fn, Land land);
-    ProcessId create_process(stl::StringView path);
+    ProcessId create_process(ProcessFn fn, memory::virt::Space space, Land land, stl::StringView cwd);
+    ProcessId create_process(ProcessFn fn, Land land, stl::StringView cwd);
+    ProcessId create_process(stl::StringView path, stl::StringView cwd);
 
     ProcessId get_current_process();
     State get_process_state(ProcessId id);
+
+    stl::StringView get_cwd(ProcessId id);
+    void set_cwd(ProcessId id, stl::StringView path);
 
     /// Returns 0xFFFFFFFF on failure
     uint32_t add_fd(ProcessId id, vfs::File* file);

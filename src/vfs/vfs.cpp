@@ -236,6 +236,8 @@ namespace cosmos::vfs {
     static File* open_dir(Node* node, const Mode mode) {
         if (is_write(mode)) return nullptr;
 
+        if (!node->populated) node->fs_ops->populate(node);
+
         node->open_read++;
 
         const auto file = memory::heap::alloc<File>(sizeof(stl::LinkedList<Node>::Iterator));

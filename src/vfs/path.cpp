@@ -1,6 +1,7 @@
 #include "path.hpp"
 
 #include "memory/heap.hpp"
+#include "stl/span.hpp"
 #include "utils.hpp"
 
 namespace cosmos::vfs {
@@ -25,141 +26,122 @@ namespace cosmos::vfs {
         return length;
     }
 
-    bool PathEntryIt::next() {
-        const auto prev_entry = entry;
-        entry += length;
+    static stl::StringView alloc_copy(const stl::StringView str) {
+        const auto copy = memory::heap::alloc_array<char>(str.size() + 1);
 
-        while (*entry == '/') {
-            entry++;
-        }
+        utils::memcpy(copy, str.data(), str.size());
+        copy[str.size()] = '\0';
 
-        if (*entry == '\0') {
-            entry = prev_entry;
-            return false;
-        }
+        return stl::StringView(copy, str.size());
+    }
 
-        length = 0;
-        while (entry[length] != '/' && entry[length] != '\0') {
-            length++;
+    template <std::same_as<stl::StringView>... T>
+    static stl::StringView alloc_append(const T... parts) {
+        const uint64_t size = (0 + ... + parts.size());
+
+        const auto copy = memory::heap::alloc_array<char>(size + 1);
+        auto current = copy;
+
+        // ReSharper disable once CppDFAUnusedValue
+        ((utils::memcpy(current, parts.data(), parts.size()), current += parts.size()), ...);
+        copy[size] = '\0';
+
+        return stl::StringView(copy, size);
+    }
+
+    stl::StringView join(const stl::StringView a, const stl::StringView b) {
+        if (a.empty() && b.empty()) return alloc_copy("");
+        if (a.empty()) return alloc_copy(b);
+        if (b.empty()) return alloc_copy(a);
+
+        const auto slash_count = (a[a.size() - 1] == '/' ? 1 : 0) + (b[0] == '/' ? 1 : 0);
+
+        if (slash_count == 2) return alloc_append(a, b.substr(1));
+        if (slash_count == 1) return alloc_append(a, b);
+
+        return alloc_append(a, stl::StringView("/"), b);
+    }
+
+    static bool push_segment(stl::StringView* segments, uint32_t& segment_count, stl::StringView segment) {
+        segment = segment.trim();
+        if (segment.empty()) return true;
+
+        if (segment == ".") return true;
+
+        if (segment == "..") {
+            if (segment_count == 0) return false;
+            segment_count--;
+        } else {
+            if (segment_count == 32) return false;
+            segments[segment_count++] = segment;
         }
 
         return true;
     }
 
-    PathEntryIt iterate_path_entries(const char* path) {
-        return {
-            .entry = path,
-            .length = 0,
-        };
+    static stl::StringView join_abs(const stl::Span<stl::StringView> segments) {
+        // Return / if there are no segments
+        if (segments.empty()) return alloc_copy("/");
+
+        // Join segments
+        uint64_t size = 0;
+
+        for (const auto& segment : segments) {
+            size += 1 + segment.size();
+        }
+
+        const auto path = memory::heap::alloc_array<char>(size + 1);
+        auto current = path;
+
+        for (const auto& segment : segments) {
+            *current = '/';
+            utils::memcpy(current + 1, segment.data(), segment.size());
+            current += 1 + segment.size();
+        }
+
+        *current = '\0';
+        return stl::StringView(path, size);
     }
 
-    // Helper to append a segment to a vector-like char buffer
-    static void append_segment(char* out, uint32_t& out_len, const char* seg, const uint32_t seg_len) {
-        if (out_len > 1) {
-            // not root, add separator
-            out[out_len++] = '/';
+    stl::StringView resolve(stl::StringView cwd, const stl::StringView path) {
+        // Path is already absolute
+        if (path.size() >= 1 && path[0] == '/') {
+            const auto size = check_abs_path(path);
+            return alloc_copy(path.substr(0, size));
         }
 
-        for (uint32_t i = 0; i < seg_len; i++) {
-            out[out_len++] = seg[i];
-        }
-        out[out_len] = '\0';
-    }
+        // Check that cwd is absolute
+        {
+            const auto size = check_abs_path(cwd);
+            if (size == 0) return alloc_copy("");
 
-    char* resolve_path(const char* cwd, const char* path) {
-        if (path == nullptr) return nullptr;
-
-        const char* trimmed = utils::str_trim_left(path);
-        if (*trimmed == '\0') {
-            const auto len = check_abs_path(cwd);
-            if (len == 0) return nullptr;
-
-            const auto out = memory::heap::alloc_array<char>(len + 1);
-            utils::memcpy(out, cwd, len);
-            out[len] = '\0';
-            return out;
+            cwd = cwd.substr(0, size);
         }
 
-        // Absolute path: validate and return copy
-        if (trimmed[0] == '/') {
-            const auto len = check_abs_path(trimmed);
-            if (len == 0) return nullptr;
+        // Split both cwd and path into segments and store them on stack
+        stl::StringView segments[32];
+        uint32_t segment_count = 0;
 
-            const auto out = memory::heap::alloc_array<char>(len + 1);
-            utils::memcpy(out, trimmed, len);
-            out[len] = '\0';
-            return out;
-        }
+        {
+            auto it = stl::split(cwd, '/');
 
-        // Relative path: join cwd + '/' + path then normalize
-        const auto cwd_len = check_abs_path(cwd);
-        if (cwd_len == 0) return nullptr;
-
-        uint32_t path_len = 0;
-        while (trimmed[path_len] != '\0')
-            path_len++;
-
-        const auto joined_len = cwd_len + 1 + path_len + 1;
-        const auto joined = memory::heap::alloc_array<char>(joined_len);
-
-        utils::memcpy(joined, cwd, cwd_len);
-        joined[cwd_len] = '/';
-        utils::memcpy(&joined[cwd_len + 1], trimmed, path_len);
-        joined[cwd_len + 1 + path_len] = '\0';
-
-        const auto segments = memory::heap::alloc_array<char>(joined_len);
-        uint32_t seg_len = 0; // current length of the normalized path buffer
-
-        if (auto it = iterate_path_entries(joined); it.next()) {
-            do {
-                const char* entry = it.entry;
-                const auto entry_length = it.length;
-
-                // Handle '.' -> skip
-                if (entry_length == 1 && entry[0] == '.') continue;
-
-                // Handle '..' -> pop last segment if possible
-                if (entry_length == 2 && entry[0] == '.' && entry[1] == '.') {
-                    // If we're at root (seg_len == 0), cannot go above root
-                    if (seg_len == 0) {
-                        memory::heap::free(joined);
-                        memory::heap::free(segments);
-                        return nullptr;
-                    }
-
-                    // Remove last segment: find last '/' in segments
-                    uint32_t i = seg_len;
-                    while (i > 0 && segments[i - 1] != '/')
-                        i--;
-                    seg_len = i > 0 ? i - 1 : 0;
-                    segments[seg_len] = '\0';
-                    continue;
+            while (it.next()) {
+                if (!push_segment(segments, segment_count, it.entry)) {
+                    return alloc_copy("");
                 }
-
-                // Normal segment -> append
-                append_segment(segments, seg_len, entry, entry_length);
-            } while (it.next());
+            }
         }
 
-        if (seg_len == 0) {
-            const auto out = memory::heap::alloc_array<char>(2);
-            out[0] = '/';
-            out[1] = '\0';
-            memory::heap::free(joined);
-            memory::heap::free(segments);
-            return out;
+        {
+            auto it = stl::split(path, '/');
+
+            while (it.next()) {
+                if (!push_segment(segments, segment_count, it.entry)) {
+                    return alloc_copy("");
+                }
+            }
         }
 
-        // segments currently holds the path without leading '/'
-        const auto out_len = seg_len + 1;
-        const auto out = memory::heap::alloc_array<char>(out_len + 1);
-        out[0] = '/';
-        utils::memcpy(&out[1], segments, seg_len);
-        out[out_len] = '\0';
-
-        memory::heap::free(joined);
-        memory::heap::free(segments);
-
-        return out;
+        return join_abs(stl::Span(segments, segment_count));
     }
 } // namespace cosmos::vfs

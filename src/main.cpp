@@ -52,10 +52,10 @@ void init() {
     INFO("Initialized");
 
     vfs::mount("/iso", "iso9660", "/dev/ata01");
-    scheduler::create_process("/iso/shell");
+    scheduler::create_process("/iso/shell", "/");
 
     log::disable_display();
-    scheduler::create_process(shell::run, scheduler::Land::Kernel);
+    scheduler::create_process(shell::run, scheduler::Land::Kernel, "/");
 
     scheduler::exit(0);
 }
@@ -89,7 +89,7 @@ void main() {
     memory::virt::init_range_alloc();
     syscalls::init();
 
-    scheduler::create_process(init, space, scheduler::Land::Kernel);
+    scheduler::create_process(init, space, scheduler::Land::Kernel, "/");
     scheduler::run();
 
     utils::halt();

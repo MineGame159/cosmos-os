@@ -24,6 +24,8 @@ namespace cosmos::scheduler {
         uint32_t event_count;
         bool event_signalled;
 
+        stl::StringView cwd;
+
         stl::FixedList<vfs::File*, 64, nullptr> fd_table;
     };
 
