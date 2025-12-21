@@ -20,7 +20,7 @@ namespace cosmos::log {
     static uint64_t size = 0;
     static uint32_t capacity = 4096;
 
-    void print(const shell::Color color, const char* str) {
+    static void print_str(const display::Color color, const char* str) {
         // Serial
         serial::print(str);
 
@@ -50,35 +50,35 @@ namespace cosmos::log {
         size += length;
     }
 
-    void print_type(const Type type) {
+    static void print_type(const Type type) {
         switch (type) {
         case Type::Debug:
-            print(shell::GRAY, "[DEBG] ");
+            print_str(display::GRAY, "[DEBG] ");
             break;
         case Type::Info:
-            print(shell::GREEN, "[INFO] ");
+            print_str(display::GREEN, "[INFO] ");
             break;
         case Type::Warning:
-            print(shell::YELLOW, "[WARN] ");
+            print_str(display::YELLOW, "[WARN] ");
             break;
         case Type::Error:
-            print(shell::RED, "[ERR ] ");
+            print_str(display::RED, "[ERR ] ");
             break;
         default:
-            print(shell::BLUE, "[????] ");
+            print_str(display::BLUE, "[????] ");
             break;
         }
     }
 
-    void print_file(const shell::Color color, const char* file) {
+    static void print_file(const display::Color color, const char* file) {
         if (utils::str_has_prefix(file, "../src/")) {
             file = &file[7];
         }
 
-        print(color, file);
+        print_str(color, file);
     }
 
-    void print_num(const shell::Color color, uint32_t num) {
+    static void print_num(const display::Color color, uint32_t num) {
         static char buffer[16];
         auto len = 0u;
 
@@ -94,7 +94,7 @@ namespace cosmos::log {
         }
 
         buffer[len] = '\0';
-        print(color, buffer);
+        print_str(color, buffer);
     }
 
     void enable_display(const bool delay) {
@@ -127,11 +127,11 @@ namespace cosmos::log {
         static char buffer[256];
 
         print_type(type);
-        print_file(shell::WHITE, file);
+        print_file(display::WHITE, file);
 
-        print(shell::GRAY, ":");
-        print_num(shell::GRAY, line);
-        print(shell::GRAY, " - ");
+        print_str(display::GRAY, ":");
+        print_num(display::GRAY, line);
+        print_str(display::GRAY, " - ");
 
         auto len = npf_vsnprintf(buffer, 256, fmt, args);
 
@@ -140,8 +140,8 @@ namespace cosmos::log {
             len--;
         }
 
-        print(shell::WHITE, buffer);
-        print(shell::WHITE, "\n");
+        print_str(display::WHITE, buffer);
+        print_str(display::WHITE, "\n");
     }
 
     void println(const Type type, const char* file, const uint32_t line, const char* fmt, ...) {

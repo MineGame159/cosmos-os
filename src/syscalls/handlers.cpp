@@ -68,7 +68,7 @@ namespace cosmos::syscalls {
 
         const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
 
-        const auto file = vfs::open(path, mode);
+        const auto file = vfs::open(abs_path, mode);
         if (file == nullptr) {
             free_string(abs_path);
             return -1;
@@ -116,7 +116,8 @@ namespace cosmos::syscalls {
         const auto file = scheduler::get_file(pid, fd);
         if (file == nullptr) return -1;
 
-        return file->ops->read(file, buffer, length);
+        const auto a = file->ops->read(file, buffer, length);
+        return a;
     }
 
     int64_t write(const uint64_t fd, const uint64_t buffer_, const uint64_t length) {
@@ -139,6 +140,44 @@ namespace cosmos::syscalls {
         if (file == nullptr) return -1;
 
         return file->ops->ioctl(file, op, arg);
+    }
+
+    int64_t create_dir(const uint64_t path_) {
+        const auto path = get_string_view(path_);
+        const auto pid = scheduler::get_current_process();
+
+        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+
+        const auto result = vfs::create_dir(abs_path);
+
+        free_string(abs_path);
+        return result ? 0 : -1;
+    }
+
+    int64_t remove(const uint64_t path_) {
+        const auto path = get_string_view(path_);
+        const auto pid = scheduler::get_current_process();
+
+        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+
+        const auto result = vfs::remove(abs_path);
+
+        free_string(abs_path);
+        return result ? 0 : -1;
+    }
+
+    int64_t mount(const uint64_t target_path_, const uint64_t filesystem_name_, const uint64_t device_path_) {
+        const auto target_path = get_string_view(target_path_);
+        const auto filesystem_name = get_string_view(filesystem_name_);
+        const auto device_path = get_string_view(device_path_);
+
+        const auto pid = scheduler::get_current_process();
+        const auto cwd = scheduler::get_cwd(pid);
+
+        const auto abs_target_path = vfs::resolve(cwd, target_path);
+        const auto abs_device_path = vfs::resolve(cwd, device_path);
+
+        return vfs::mount(abs_target_path, filesystem_name, abs_device_path) != nullptr ? 0 : -1;
     }
 
     int64_t eventfd() {
@@ -190,13 +229,15 @@ namespace cosmos::syscalls {
     }
 
     int64_t set_cwd(const uint64_t path_) {
-        const auto pid = scheduler::get_current_process();
         const auto path = get_string_view(path_);
+        const auto pid = scheduler::get_current_process();
+
+        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
 
         vfs::Stat stat;
-        if (!vfs::stat(path, stat) || stat.type != vfs::NodeType::Directory) return -1;
+        if (!vfs::stat(abs_path, stat) || stat.type != vfs::NodeType::Directory) return -1;
 
-        scheduler::set_cwd(pid, path);
+        scheduler::set_cwd(pid, abs_path);
         return 0;
     }
 
@@ -242,10 +283,13 @@ namespace cosmos::syscalls {
             CASE_3(6, read)
             CASE_3(7, write)
             CASE_3(8, ioctl)
-            CASE_0(9, eventfd)
-            CASE_4(10, poll)
-            CASE_2(11, get_cwd)
-            CASE_1(12, set_cwd)
+            CASE_1(9, create_dir)
+            CASE_1(10, remove)
+            CASE_3(11, mount)
+            CASE_0(12, eventfd)
+            CASE_4(13, poll)
+            CASE_2(14, get_cwd)
+            CASE_1(15, set_cwd)
 
         default:
             ERROR("Invalid syscalls %llu from process %llu", number, scheduler::get_current_process());

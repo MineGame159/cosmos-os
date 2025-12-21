@@ -177,8 +177,11 @@ namespace cosmos::vfs::iso9660 {
 
         fs_info->device->ops->seek(fs_info->device, SeekType::Start, static_cast<int64_t>(node_info->data_offset + file->cursor));
 
-        const auto to_read = stl::min(length, node_info->data_size);
-        return fs_info->device->ops->read(fs_info->device, buffer, to_read);
+        const auto to_read = stl::min(length, node_info->data_size - file->cursor);
+        const auto read = fs_info->device->ops->read(fs_info->device, buffer, to_read);
+
+        file->cursor += read;
+        return read;
     }
 
     uint64_t file_ioctl([[maybe_unused]] File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {

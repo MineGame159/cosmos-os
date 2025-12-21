@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace cosmos::shell {
+namespace cosmos::log::display {
     struct Color {
         uint8_t r;
         uint8_t g;
@@ -22,4 +22,4 @@ namespace cosmos::shell {
     constexpr Color CYAN = { 0, 180, 180 };
     constexpr Color DARK_CYAN = { 0, 100, 100 };
     constexpr Color YELLOW = { 255, 255, 0 };
-} // namespace cosmos::shell
+} // namespace cosmos::log::display

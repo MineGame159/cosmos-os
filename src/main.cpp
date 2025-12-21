@@ -18,7 +18,6 @@
 #include "memory/virtual.hpp"
 #include "scheduler/scheduler.hpp"
 #include "serial.hpp"
-#include "shell/shell.hpp"
 #include "syscalls/init.hpp"
 #include "tss.hpp"
 #include "utils.hpp"
@@ -49,13 +48,12 @@ void init() {
     devices::info::init(devfs);
     devices::pci::init(devfs);
 
+    vfs::mount("/iso", "iso9660", "/dev/ata01");
+
     INFO("Initialized");
 
-    vfs::mount("/iso", "iso9660", "/dev/ata01");
-    scheduler::create_process("/iso/shell", "/");
-
     log::disable_display();
-    scheduler::create_process(shell::run, scheduler::Land::Kernel, "/");
+    scheduler::create_process("/iso/shell", "/");
 
     scheduler::exit(0);
 }

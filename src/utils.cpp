@@ -10,14 +10,14 @@
 namespace cosmos::utils {
     void panic_print_regs(const char* r0_name, const uint64_t r0, const char* r1_name, const uint64_t r1, const char* r2_name,
                           const uint64_t r2) {
-        log::display::printf(shell::WHITE, "  %s=", r0_name);
-        log::display::printf(shell::GRAY, "0x%016llX", r0);
+        log::display::printf(log::display::WHITE, "  %s=", r0_name);
+        log::display::printf(log::display::GRAY, "0x%016llX", r0);
 
-        log::display::printf(shell::WHITE, " %s=", r1_name);
-        log::display::printf(shell::GRAY, "0x%016llX", r1);
+        log::display::printf(log::display::WHITE, " %s=", r1_name);
+        log::display::printf(log::display::GRAY, "0x%016llX", r1);
 
-        log::display::printf(shell::WHITE, " %s=", r2_name);
-        log::display::printf(shell::GRAY, "0x%016llX\n", r2);
+        log::display::printf(log::display::WHITE, " %s=", r2_name);
+        log::display::printf(log::display::GRAY, "0x%016llX\n", r2);
     }
 
     struct Frame {
@@ -36,10 +36,10 @@ namespace cosmos::utils {
     }
 
     void panic_print_stack_frame(const uint64_t index, const uint64_t address) {
-        log::display::printf(shell::WHITE, "  Frame ");
-        log::display::printf(shell::GRAY, "%d", index);
-        log::display::printf(shell::WHITE, ": ");
-        log::display::printf(shell::GRAY, "0x%016llX\n", address);
+        log::display::printf(log::display::WHITE, "  Frame ");
+        log::display::printf(log::display::GRAY, "%d", index);
+        log::display::printf(log::display::WHITE, ": ");
+        log::display::printf(log::display::GRAY, "0x%016llX\n", address);
     }
 
     void panic_print_stack_trace(uint64_t rbp) {
@@ -71,35 +71,35 @@ namespace cosmos::utils {
         va_end(args);
 
         log::enable_display(false);
-        log::display::printf(shell::WHITE, "\n");
-        log::display::printf(shell::WHITE, " --- KERNEL PANIC ---\n");
-        log::display::printf(shell::WHITE, "  %s", buffer);
+        log::display::printf(log::display::WHITE, "\n");
+        log::display::printf(log::display::WHITE, " --- KERNEL PANIC ---\n");
+        log::display::printf(log::display::WHITE, "  %s", buffer);
 
         if (info != nullptr) {
-            log::display::printf(shell::GRAY, " (%d", info->interrupt);
-            log::display::printf(shell::WHITE, ") - ");
-            log::display::printf(shell::GRAY, "%d", info->error);
+            log::display::printf(log::display::GRAY, " (%d", info->interrupt);
+            log::display::printf(log::display::WHITE, ") - ");
+            log::display::printf(log::display::GRAY, "%d", info->error);
         }
 
-        log::display::printf(shell::WHITE, "\n\n");
+        log::display::printf(log::display::WHITE, "\n\n");
 
         if (info != nullptr) {
-            log::display::printf(shell::WHITE, " --- REGISTERS ---\n");
+            log::display::printf(log::display::WHITE, " --- REGISTERS ---\n");
             panic_print_regs("RAX", info->rax, "RBX", info->rbx, "RCX", info->rcx);
             panic_print_regs("RDX", info->rdx, "RSI", info->rsi, "RDI", info->rdi);
             panic_print_regs("R8 ", info->r8, "R9 ", info->r9, "R10", info->r10);
             panic_print_regs("R11", info->r11, "R12", info->r12, "R13", info->r13);
             panic_print_regs("R14", info->r14, "R15", info->r15, "RBP", info->rbp);
-            log::display::printf(shell::WHITE, "\n");
+            log::display::printf(log::display::WHITE, "\n");
 
-            log::display::printf(shell::WHITE, " --- STACK TRACE ---\n");
+            log::display::printf(log::display::WHITE, " --- STACK TRACE ---\n");
             panic_print_stack_frame(0, info->iret_rip);
         } else {
-            log::display::printf(shell::WHITE, " --- STACK TRACE ---\n");
+            log::display::printf(log::display::WHITE, " --- STACK TRACE ---\n");
         }
 
         panic_print_stack_trace(info != nullptr ? info->rbp : 0);
-        log::display::printf(shell::WHITE, "\n");
+        log::display::printf(log::display::WHITE, "\n");
 
         halt();
     }

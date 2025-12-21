@@ -1,10 +1,10 @@
 #include "display.hpp"
 
+#include "font.hpp"
 #include "limine.hpp"
 #include "memory/offsets.hpp"
 #include "memory/virtual.hpp"
 #include "nanoprintf.h"
-#include "shell/font.hpp"
 #include "utils.hpp"
 
 #include <cstdarg>
@@ -46,8 +46,8 @@ namespace cosmos::log::display {
         row = 0;
         column++;
 
-        if (column >= height / shell::FONT_HEIGHT) {
-            const auto row_size = shell::FONT_HEIGHT * pitch;
+        if (column >= height / FONT_HEIGHT) {
+            const auto row_size = FONT_HEIGHT * pitch;
             const auto pixels = get_pixels();
 
             utils::memcpy(&pixels[0], &pixels[row_size], (height * pitch - row_size) * 4);
@@ -60,28 +60,28 @@ namespace cosmos::log::display {
         }
     }
 
-    void print(const shell::Color color, const char ch) {
+    void print(const Color color, const char ch) {
         if (ch == '\n') {
             new_line();
             return;
         }
 
-        const auto glyph = shell::get_font_glyph(ch);
+        const auto glyph = get_font_glyph(ch);
 
         if (glyph.valid()) {
             const auto pixels = get_pixels();
             const auto pixel = color.pack();
 
-            for (auto ch_y = 0u; ch_y < shell::FONT_HEIGHT; ch_y++) {
-                for (auto ch_x = 0u; ch_x < shell::FONT_WIDTH; ch_x++) {
+            for (auto ch_y = 0u; ch_y < FONT_HEIGHT; ch_y++) {
+                for (auto ch_x = 0u; ch_x < FONT_WIDTH; ch_x++) {
                     if (glyph.is_set(ch_x, ch_y)) {
-                        pixels[(column * shell::FONT_HEIGHT + ch_y) * pitch + (row * shell::FONT_WIDTH + ch_x)] = pixel;
+                        pixels[(column * FONT_HEIGHT + ch_y) * pitch + (row * FONT_WIDTH + ch_x)] = pixel;
                     }
                 }
             }
         }
 
-        if (row >= width / shell::FONT_WIDTH) {
+        if (row >= width / FONT_WIDTH) {
             new_line();
         } else {
             row++;
@@ -89,7 +89,7 @@ namespace cosmos::log::display {
     }
 
     // ReSharper disable once CppParameterMayBeConst
-    void print(const shell::Color color, const char* str) {
+    void print(const Color color, const char* str) {
         while (*str != '\0') {
             print(color, *str);
             str++;
@@ -102,7 +102,7 @@ namespace cosmos::log::display {
         }
     }
 
-    void printf(const shell::Color color, const char* fmt, ...) {
+    void printf(const Color color, const char* fmt, ...) {
         static char buffer[256];
 
         va_list args;

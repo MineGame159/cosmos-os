@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace cosmos::shell {
+namespace cosmos::log::display {
     constexpr uint32_t FONT_WIDTH = 8;
     constexpr uint32_t FONT_HEIGHT = 16;
     constexpr uint32_t FONT_SIZE = FONT_WIDTH * FONT_HEIGHT;
@@ -25,4 +25,4 @@ namespace cosmos::shell {
     };
 
     Glyph get_font_glyph(char ch);
-} // namespace cosmos::shell
+} // namespace cosmos::log::display

@@ -117,6 +117,7 @@ namespace cosmos::vfs {
 
     struct DirEntry {
         NodeType type;
-        const char* name;
+        char name[256];
+        uint64_t name_size;
     };
 } // namespace cosmos::vfs

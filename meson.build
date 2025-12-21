@@ -13,6 +13,7 @@ sources = [
     'src/serial.cpp',
     'src/gdt.cpp',
     'src/tss.cpp',
+    'src/log/font.cpp',
     'src/log/display.cpp',
     'src/log/log.cpp',
     'src/log/devfs.cpp',
@@ -42,9 +43,6 @@ sources = [
     'src/vfs/ramfs.cpp',
     'src/vfs/devfs.cpp',
     'src/vfs/iso9660.cpp',
-    'src/shell/font.cpp',
-    'src/shell/commands.cpp',
-    'src/shell/shell.cpp',
     'src/main.cpp'
 ]
 

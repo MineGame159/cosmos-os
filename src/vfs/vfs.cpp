@@ -3,6 +3,7 @@
 #include "log/log.hpp"
 #include "memory/heap.hpp"
 #include "path.hpp"
+#include "stl/utils.hpp"
 #include "utils.hpp"
 
 namespace cosmos::vfs {
@@ -206,10 +207,12 @@ namespace cosmos::vfs {
         const auto it = reinterpret_cast<stl::LinkedList<Node>::Iterator*>(file + 1);
 
         if (*it != stl::LinkedList<Node>::end()) {
-            *static_cast<DirEntry*>(buffer) = DirEntry{
-                .type = (*it)->type,
-                .name = (*it)->name.data(),
-            };
+            const auto node = *it;
+            const auto entry = static_cast<DirEntry*>(buffer);
+
+            entry->type = node->type;
+            utils::memcpy(entry->name, node->name.data(), stl::min(node->name.size(), 256ul));
+            entry->name_size = node->name.size();
 
             ++*it;
             return sizeof(DirEntry);
