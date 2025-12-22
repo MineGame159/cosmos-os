@@ -77,6 +77,10 @@ namespace cosmos::scheduler {
     }
 
     void delete_process(const Process* process, stl::LinkedList<Process>::Iterator* it_ptr) {
+        for (const auto file : process->fd_table) {
+            vfs::close(file);
+        }
+
         memory::heap::free(const_cast<char*>(process->cwd.data()));
         memory::virt::destroy(process->space);
         memory::heap::free(process->kernel_stack);
