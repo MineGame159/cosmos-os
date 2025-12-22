@@ -17,8 +17,9 @@ enum class Sys : int64_t {
     Mount = 11,
     Eventfd = 12,
     Poll = 13,
-    GetCwd = 14,
-    SetCwd = 15,
+    Fork = 14,
+    GetCwd = 15,
+    SetCwd = 16,
 };
 
 template <const Sys S>
@@ -135,13 +136,13 @@ namespace sys {
         syscall<Sys::Yield>();
     }
 
-    inline bool stat(const char* path, Stat* stat) {
-        return syscall<Sys::Stat>(reinterpret_cast<uint64_t>(path), reinterpret_cast<uint64_t>(stat)) >= 0;
+    inline bool stat(const char* path, Stat& stat) {
+        return syscall<Sys::Stat>(reinterpret_cast<uint64_t>(path), reinterpret_cast<uint64_t>(&stat)) >= 0;
     }
 
-    inline bool open(const char* path, const Mode mode, uint32_t* fd) {
+    inline bool open(const char* path, const Mode mode, uint32_t& fd) {
         const auto result = syscall<Sys::Open>(reinterpret_cast<uint64_t>(path), static_cast<uint64_t>(mode));
-        *fd = static_cast<uint32_t>(result);
+        fd = static_cast<uint32_t>(result);
         return result >= 0;
     }
 
@@ -203,6 +204,12 @@ namespace sys {
 
     inline bool poll(const uint32_t* fds, const uint64_t count, const bool reset_signalled, uint64_t& mask) {
         return syscall<Sys::Poll>(reinterpret_cast<uint64_t>(fds), count, reset_signalled ? 1 : 0, reinterpret_cast<uint64_t>(&mask)) >= 0;
+    }
+
+    inline bool fork(uint64_t& pid) {
+        const auto result = syscall<Sys::Fork>();
+        pid = static_cast<uint64_t>(result);
+        return result >= 0;
     }
 
     inline uint64_t get_cwd(char* buffer, const uint64_t length) {

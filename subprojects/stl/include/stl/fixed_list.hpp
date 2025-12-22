@@ -11,30 +11,30 @@ namespace stl {
         struct Iterator {
             const T* items;
             size_t max_count;
-            size_t i;
+            size_t index;
 
             bool operator==(const Iterator& other) const {
-                return i == other.i;
+                return index == other.index;
             }
 
             const T& operator*() const {
-                return items[i];
+                return items[index];
             }
 
             const T* operator->() const {
-                return &items[i];
+                return &items[index];
             }
 
             Iterator& operator++() {
                 do {
-                    i++;
-                } while (i < max_count && items[i] == EMPTY);
+                    index++;
+                } while (index < max_count && items[index] == EMPTY);
 
                 return *this;
             }
 
             const T* operator++(int) {
-                const auto item = &items[i];
+                const auto item = &items[index];
                 ++*this;
                 return item;
             }
@@ -70,6 +70,18 @@ namespace stl {
         const T& get(const size_t index) const {
             if (index >= max_count) return EMPTY_FIELD;
             return items[index];
+        }
+
+        T set(const size_t index, const T item) {
+            const auto prev = items[index];
+
+            items[index] = item;
+
+            if (index >= max_count) {
+                max_count = index + 1;
+            }
+
+            return prev;
         }
 
         intptr_t add(T item) {

@@ -101,7 +101,18 @@ namespace cosmos::scheduler {
         asm volatile("iretq");
     }
 
-    ProcessId create_process(const ProcessFn fn, const memory::virt::Space space, const Land land, const stl::StringView cwd) {
+    void setup_dummy_frame(StackFrame& frame, const ProcessFn fn) {
+        for (auto i = 0ul; i < 15; i++) {
+            frame[i] = i;
+        }
+
+        frame.rip = reinterpret_cast<uint64_t>(fn);
+        frame.rflags = 0x202;
+        frame.user_rsp = memory::virt::LOWER_HALF_END;
+    }
+
+    ProcessId create_process(const ProcessFn fn, const memory::virt::Space space, const Land land, const StackFrame& frame,
+                             const stl::StringView cwd) {
         const auto process = processes.push_back_alloc();
 
         // Set basic fields
@@ -165,21 +176,21 @@ namespace cosmos::scheduler {
         auto stack = reinterpret_cast<uint64_t*>(static_cast<uint8_t*>(process->kernel_stack) + KERNEL_STACK_SIZE);
 
         if (land == Land::Kernel) {
-            *--stack = reinterpret_cast<uint64_t>(fn); // Entry point
-            *--stack = 0x202;                          // Flags
+            *--stack = frame.rip;    // Entry point
+            *--stack = frame.rflags; // Flags
         } else {
-            *--stack = 24 | 3;                       // GDT - User data
-            *--stack = memory::virt::LOWER_HALF_END; // User RSP
-            *--stack = 0x202;                        // Flags
-            *--stack = 32 | 3;                       // GDT - User code
+            *--stack = 24 | 3;         // GDT - User data
+            *--stack = frame.user_rsp; // User RSP
+            *--stack = frame.rflags;   // Flags
+            *--stack = 32 | 3;         // GDT - User code
+            *--stack = frame.rip;      // Entry point
 
-            *--stack = reinterpret_cast<uint64_t>(fn);              // Entry point
             *--stack = reinterpret_cast<uint64_t>(user_entry_stub); // Entry point stub
             *--stack = 0x202;                                       // Flags
         }
 
         for (auto i = 0ul; i < 15; i++) {
-            *--stack = i;
+            *--stack = frame[i];
         }
 
         process->kernel_stack_rsp = reinterpret_cast<uint64_t>(stack);
@@ -192,10 +203,16 @@ namespace cosmos::scheduler {
     }
 
     ProcessId create_process(const ProcessFn fn, const Land land, const stl::StringView cwd) {
+        // Create address space
         const auto space = memory::virt::create();
         if (space == 0) return 0;
 
-        const auto id = create_process(fn, space, land, cwd);
+        // Setup stack frame
+        StackFrame frame;
+        setup_dummy_frame(frame, fn);
+
+        // Create process
+        const auto id = create_process(fn, space, land, frame, cwd);
         if (id == 0) memory::virt::destroy(space);
 
         return id;
@@ -241,6 +258,37 @@ namespace cosmos::scheduler {
         // Cleanup
         memory::heap::free(binary);
         vfs::close(file);
+
+        return id;
+    }
+
+    ProcessId fork(const ProcessId other_id, const StackFrame& frame) {
+        const auto other = reinterpret_cast<Process*>(other_id);
+
+        if (other->land != Land::User) {
+            ERROR("Can only fork user-land processes");
+            return 0;
+        }
+
+        // Fork address space
+        const auto space = memory::virt::fork(other->space);
+        if (space == 0) return 0;
+
+        // Create process
+        const auto id = create_process(other->fn, space, other->land, frame, other->cwd);
+
+        if (id == 0) {
+            memory::virt::destroy(space);
+            return 0;
+        }
+
+        const auto process = reinterpret_cast<Process*>(id);
+
+        // Duplicate file descriptors
+        for (auto it = other->fd_table.begin(); it != other->fd_table.end(); ++it) {
+            const auto file = vfs::duplicate(*it);
+            process->fd_table.set(it.index, file);
+        }
 
         return id;
     }

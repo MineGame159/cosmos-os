@@ -67,6 +67,7 @@ namespace cosmos::scheduler {
         file->ops = &event_ops;
         file->on_close = event_close;
         file->node = nullptr;
+        file->ref_count = 1;
         file->mode = vfs::Mode::ReadWrite;
         file->cursor = 0;
 

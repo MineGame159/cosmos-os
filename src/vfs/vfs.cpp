@@ -190,6 +190,7 @@ namespace cosmos::vfs {
         file->ops = ops;
         file->on_close = nullptr;
         file->node = node;
+        file->ref_count = 1;
         file->mode = mode;
         file->cursor = 0;
 
@@ -247,6 +248,7 @@ namespace cosmos::vfs {
         file->ops = &dir_ops;
         file->on_close = nullptr;
         file->node = node;
+        file->ref_count = 1;
         file->mode = mode;
         file->cursor = 0;
 
@@ -282,7 +284,22 @@ namespace cosmos::vfs {
         return nullptr;
     }
 
+    File* duplicate(File* file) {
+        file->ref_count++;
+        return file;
+    }
+
     void close(File* file) {
+        if (file->ref_count == 0) {
+            ERROR("File reference count is 0, double close detected");
+            return;
+        }
+
+        if (file->ref_count > 1) {
+            file->ref_count--;
+            return;
+        }
+
         if (file->node != nullptr) {
             if (is_read(file->mode)) file->node->open_read--;
             if (is_write(file->mode)) file->node->open_write--;

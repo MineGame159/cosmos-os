@@ -93,6 +93,8 @@ namespace cosmos::vfs {
 
         Node* node;
 
+        uint32_t ref_count;
+
         Mode mode;
         uint64_t cursor;
 

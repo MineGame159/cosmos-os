@@ -32,7 +32,7 @@ namespace terminal {
 
     void init() {
         // Framebuffer
-        if (!sys::open("/dev/framebuffer", sys::Mode::ReadWrite, &fb)) {
+        if (!sys::open("/dev/framebuffer", sys::Mode::ReadWrite, fb)) {
             sys::exit(1);
         }
 
@@ -46,7 +46,7 @@ namespace terminal {
 
         // Cursor blink timer event
         uint32_t timer;
-        if (!sys::open("/dev/timer", sys::Mode::Read, &timer)) {
+        if (!sys::open("/dev/timer", sys::Mode::Read, timer)) {
             sys::exit(1);
         }
 
@@ -212,7 +212,7 @@ namespace terminal {
 
     uint64_t read(char* buffer, const uint64_t length) {
         uint32_t kb;
-        if (!sys::open("/dev/keyboard", sys::Mode::Read, &kb)) return 0;
+        if (!sys::open("/dev/keyboard", sys::Mode::Read, kb)) return 0;
 
         const uint32_t kb_event = sys::ioctl(kb, 1, 0); // create keyboard event
         sys::ioctl(kb, 2, 0);                           // reset keyboard buffer

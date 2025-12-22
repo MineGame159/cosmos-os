@@ -24,7 +24,7 @@ static void ls(const stl::StringView args) {
     // Check directory
     sys::Stat stat;
 
-    if (!sys::stat(args_cstr, &stat) || stat.type != sys::FileType::Directory) {
+    if (!sys::stat(args_cstr, stat) || stat.type != sys::FileType::Directory) {
         terminal::print(RED, "Not a directory\n");
         return;
     }
@@ -32,7 +32,7 @@ static void ls(const stl::StringView args) {
     // Open directory
     uint32_t fd;
 
-    if (!sys::open(args_cstr, sys::Mode::Read, &fd)) {
+    if (!sys::open(args_cstr, sys::Mode::Read, fd)) {
         terminal::print(RED, "Failed to open directory\n");
         return;
     }
@@ -57,7 +57,7 @@ static void cat(const stl::StringView args) {
     // Check file
     sys::Stat stat;
 
-    if (!sys::stat(args_cstr, &stat) || stat.type != sys::FileType::File) {
+    if (!sys::stat(args_cstr, stat) || stat.type != sys::FileType::File) {
         terminal::print(RED, "Not a file\n");
         return;
     }
@@ -65,7 +65,7 @@ static void cat(const stl::StringView args) {
     // Open file
     uint32_t fd;
 
-    if (!sys::open(args_cstr, sys::Mode::Read, &fd)) {
+    if (!sys::open(args_cstr, sys::Mode::Read, fd)) {
         terminal::print(RED, "Failed to open file\n");
         return;
     }
@@ -94,7 +94,7 @@ static void touch(const stl::StringView args) {
     // Open file
     uint32_t fd;
 
-    if (!sys::open(path_cstr, sys::Mode::Write, &fd)) {
+    if (!sys::open(path_cstr, sys::Mode::Write, fd)) {
         terminal::print(RED, "Failed to open file\n");
         return;
     }

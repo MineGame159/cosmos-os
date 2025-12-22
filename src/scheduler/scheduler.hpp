@@ -22,11 +22,27 @@ namespace cosmos::scheduler {
         User,
     };
 
+    struct StackFrame {
+        uint64_t r15, r14, r13, r12, r11, r10, r9, r8, rbp, rdi, rsi, rdx, rcx, rbx, rax;
+        uint64_t rip, rflags, user_rsp;
+
+        const uint64_t& operator[](const uint32_t index) const {
+            return (&r15)[14 - (index < 15 ? index : 14)];
+        }
+        uint64_t& operator[](const uint32_t index) {
+            return (&r15)[14 - (index < 15 ? index : 14)];
+        }
+    };
+
     using ProcessId = uint64_t;
 
-    ProcessId create_process(ProcessFn fn, memory::virt::Space space, Land land, stl::StringView cwd);
+    void setup_dummy_frame(StackFrame& frame, ProcessFn fn);
+
+    ProcessId create_process(ProcessFn fn, memory::virt::Space space, Land land, const StackFrame& frame, stl::StringView cwd);
     ProcessId create_process(ProcessFn fn, Land land, stl::StringView cwd);
     ProcessId create_process(stl::StringView path, stl::StringView cwd);
+
+    ProcessId fork(ProcessId other_id, const StackFrame& frame);
 
     ProcessId get_current_process();
     State get_process_state(ProcessId id);

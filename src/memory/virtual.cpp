@@ -208,6 +208,131 @@ namespace cosmos::memory::virt {
         return space;
     }
 
+    static uint64_t* get_child_table(uint64_t& entry) {
+        if (!entry_is_present(entry)) {
+            const auto child_table_phys = phys::alloc_pages(1);
+
+            if (child_table_phys == 0) {
+                ERROR("Failed to allocate physical page for child table");
+                return nullptr;
+            }
+
+            const auto child_table = get_ptr_from_phys<uint64_t>(child_table_phys);
+            utils::memset(child_table, 0, 4096);
+
+            entry = (child_table_phys & ADDRESS_MASK) | FLAG_PRESENT | FLAG_WRITABLE | FLAG_USER;
+        }
+
+        return get_ptr_from_phys<uint64_t>(entry & ADDRESS_MASK);
+    }
+
+    template <const uint64_t ADDRESS_MASK, const uint64_t PAGE_COUNT>
+    static bool copy_direct(const uint64_t old_entry, uint64_t& new_entry) {
+        uint64_t phys;
+
+        auto flags = (old_entry & FLAG_WRITABLE) | (old_entry & FLAG_USER) | (old_entry & FLAG_NO_EXECUTE);
+        if (PAGE_COUNT > 1) flags |= FLAG_DIRECT;
+
+        if (entry_is_cache_disabled(old_entry)) {
+            phys = old_entry & ADDRESS_MASK;
+            flags |= FLAG_CACHE_DISABLE | FLAG_WRITE_THROUGH;
+        } else {
+            phys = phys::alloc_pages(PAGE_COUNT);
+            if (phys == 0) return false;
+
+            utils::memcpy(get_ptr_from_phys<void>(phys), get_ptr_from_phys<void>(old_entry & ADDRESS_MASK), PAGE_COUNT * 4096ULL);
+        }
+
+        new_entry = (phys & ADDRESS_MASK) | FLAG_PRESENT | flags;
+
+        return true;
+    }
+
+    Space fork(const Space other) {
+        const auto space = create();
+        if (space == 0) return 0;
+
+        const auto other_pml4_table = get_ptr_from_phys<uint64_t>(other);
+        const auto new_pml4_table = get_ptr_from_phys<uint64_t>(space);
+
+        for (auto pml4_index = 0; pml4_index < 256; pml4_index++) {
+            const auto other_pml4_entry = other_pml4_table[pml4_index];
+            if (!entry_is_present(other_pml4_entry)) continue;
+
+            auto& new_pml4_entry = new_pml4_table[pml4_index];
+
+            const auto other_pdp_table = get_ptr_from_phys<uint64_t>(other_pml4_entry & ADDRESS_MASK);
+            const auto new_pdp_table = get_child_table(new_pml4_entry);
+
+            if (new_pdp_table == nullptr) {
+                destroy(space);
+                return 0;
+            }
+
+            for (auto pdp_index = 0; pdp_index < 512; pdp_index++) {
+                const auto other_pdp_entry = other_pdp_table[pdp_index];
+                if (!entry_is_present(other_pdp_entry)) continue;
+
+                auto& new_pdp_entry = new_pdp_table[pdp_index];
+
+                if (entry_is_direct(other_pdp_entry)) {
+                    if (!copy_direct<DIRECT_PDP_ADDRESS_MASK, (1ULL << VIRT_ADDR_PDP_OFFSET) / 4096ULL>(other_pdp_entry, new_pdp_entry)) {
+                        destroy(space);
+                        return 0;
+                    }
+
+                    continue;
+                }
+
+                const auto other_pd_table = get_ptr_from_phys<uint64_t>(other_pdp_entry & ADDRESS_MASK);
+                const auto new_pd_table = get_child_table(new_pdp_entry);
+
+                if (new_pd_table == nullptr) {
+                    destroy(space);
+                    return 0;
+                }
+
+                for (auto pd_index = 0; pd_index < 512; pd_index++) {
+                    const auto other_pd_entry = other_pd_table[pd_index];
+                    if (!entry_is_present(other_pd_entry)) continue;
+
+                    auto& new_pd_entry = new_pd_table[pd_index];
+
+                    if (entry_is_direct(other_pd_entry)) {
+                        if (!copy_direct<DIRECT_PD_ADDRESS_MASK, (1ULL << VIRT_ADDR_PD_OFFSET) / 4096ULL>(other_pd_entry, new_pd_entry)) {
+                            destroy(space);
+                            return 0;
+                        }
+
+                        continue;
+                    }
+
+                    const auto other_pt_table = get_ptr_from_phys<uint64_t>(other_pd_entry & ADDRESS_MASK);
+                    const auto new_pt_table = get_child_table(new_pd_entry);
+
+                    if (new_pt_table == nullptr) {
+                        destroy(space);
+                        return 0;
+                    }
+
+                    for (auto pt_index = 0; pt_index < 512; pt_index++) {
+                        const auto other_pt_entry = other_pt_table[pt_index];
+                        if (!entry_is_present(other_pt_entry)) continue;
+
+                        auto& new_pt_entry = new_pt_table[pt_index];
+
+                        if (!copy_direct<ADDRESS_MASK, 1>(other_pt_entry, new_pt_entry)) {
+                            destroy(space);
+                            return 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        return space;
+    }
+
     void destroy(const Space space) {
         const auto pml4_table = get_ptr_from_phys<uint64_t>(space);
 
@@ -255,24 +380,6 @@ namespace cosmos::memory::virt {
         }
 
         phys::free_pages(space / 4096ul, 1);
-    }
-
-    uint64_t* get_child_table(uint64_t& entry) {
-        if (!entry_is_present(entry)) {
-            const auto child_table_phys = phys::alloc_pages(1);
-
-            if (child_table_phys == 0) {
-                ERROR("Failed to allocate physical page for child table");
-                return nullptr;
-            }
-
-            const auto child_table = get_ptr_from_phys<uint64_t>(child_table_phys);
-            utils::memset(child_table, 0, 4096);
-
-            entry = (child_table_phys & ADDRESS_MASK) | FLAG_PRESENT | FLAG_WRITABLE | FLAG_USER;
-        }
-
-        return get_ptr_from_phys<uint64_t>(entry & ADDRESS_MASK);
     }
 
     bool map_pages(const Space space, uint64_t virt, uint64_t phys, uint64_t count, const Flags flags) {

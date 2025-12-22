@@ -13,6 +13,7 @@ namespace cosmos::vfs {
     bool stat(stl::StringView path, Stat& stat);
 
     File* open(stl::StringView path, Mode mode);
+    File* duplicate(File* file);
     void close(File* file);
 
     bool create_dir(stl::StringView path);

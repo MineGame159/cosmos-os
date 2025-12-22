@@ -87,7 +87,10 @@ void main() {
     memory::virt::init_range_alloc();
     syscalls::init();
 
-    scheduler::create_process(init, space, scheduler::Land::Kernel, "/");
+    scheduler::StackFrame frame;
+    scheduler::setup_dummy_frame(frame, init);
+    scheduler::create_process(init, space, scheduler::Land::Kernel, frame, "/");
+
     scheduler::run();
 
     utils::halt();

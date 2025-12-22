@@ -9,11 +9,6 @@
 
 #include <cstdint>
 
-struct SyscallFrame {
-    uint64_t r15, r14, r13, r12, r11, r10, r9, r8, rbp, rdi, rsi, rdx, rcx, rbx, rax;
-    uint64_t rip, rflags, rsp;
-};
-
 namespace cosmos::syscalls {
     // Helpers
 
@@ -212,6 +207,18 @@ namespace cosmos::syscalls {
         return 0;
     }
 
+    int64_t fork(const scheduler::StackFrame& frame) {
+        // Setup child stack frame
+        auto child_frame = frame;
+        child_frame.rax = 0;
+
+        // Fork process
+        const auto pid = scheduler::get_current_process();
+        const auto child_pid = scheduler::fork(pid, child_frame);
+
+        return child_pid == 0 ? -1 : static_cast<int64_t>(child_pid);
+    }
+
     int64_t get_cwd(const uint64_t buffer_, const uint64_t length) {
         if (memory::virt::is_invalid_user(buffer_)) return -1;
         if (memory::virt::is_invalid_user(buffer_ + length - 1)) return -1;
@@ -243,7 +250,7 @@ namespace cosmos::syscalls {
 
     // Handler
 
-    extern "C" void syscall_handler(const uint64_t number, SyscallFrame* frame) {
+    extern "C" void syscall_handler(const uint64_t number, scheduler::StackFrame* frame) {
 #define CASE_0(number, handler)                                                                                                            \
     case number:                                                                                                                           \
         frame->rax = handler();                                                                                                            \
@@ -288,8 +295,13 @@ namespace cosmos::syscalls {
             CASE_3(11, mount)
             CASE_0(12, eventfd)
             CASE_4(13, poll)
-            CASE_2(14, get_cwd)
-            CASE_1(15, set_cwd)
+
+        case 14:
+            frame->rax = fork(*frame);
+            break;
+
+            CASE_2(15, get_cwd)
+            CASE_1(16, set_cwd)
 
         default:
             ERROR("Invalid syscalls %llu from process %llu", number, scheduler::get_current_process());
