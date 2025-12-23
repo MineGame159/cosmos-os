@@ -34,11 +34,11 @@ namespace cosmos::scheduler {
         }
     };
 
-    using ProcessId = uint64_t;
+    using ProcessId = uint32_t;
 
     void setup_dummy_frame(StackFrame& frame, ProcessFn fn);
 
-    ProcessId create_process(ProcessFn fn, memory::virt::Space space, Land land, const StackFrame& frame, stl::StringView cwd);
+    ProcessId create_process(ProcessFn fn, memory::virt::Space space, Land land, bool alloc_user_stack, const StackFrame& frame, stl::StringView cwd);
     ProcessId create_process(ProcessFn fn, Land land, stl::StringView cwd);
     ProcessId create_process(stl::StringView path, stl::StringView cwd);
 
@@ -54,6 +54,10 @@ namespace cosmos::scheduler {
     uint32_t add_fd(ProcessId id, vfs::File* file);
     vfs::File* get_file(ProcessId id, uint32_t fd);
     vfs::File* remove_fd(ProcessId id, uint32_t fd);
+
+    /// Suspends the calling process until the process passed to this function exists, returning its status code or 0xFFFFFFFFFFFFFFFF if
+    /// there was a failure.
+    uint64_t join(ProcessId id);
 
     void yield();
     void exit(uint64_t status);

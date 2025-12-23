@@ -248,6 +248,13 @@ namespace cosmos::syscalls {
         return 0;
     }
 
+    uint64_t join(const uint64_t pid_) {
+        if (pid_ > 0xFFFFFFFF) return 0xFFFFFFFFFFFFFFFF;
+        const auto pid = static_cast<scheduler::ProcessId>(pid_);
+
+        return scheduler::join(pid);
+    }
+
     // Handler
 
     extern "C" void syscall_handler(const uint64_t number, scheduler::StackFrame* frame) {
@@ -302,6 +309,7 @@ namespace cosmos::syscalls {
 
             CASE_2(15, get_cwd)
             CASE_1(16, set_cwd)
+            CASE_1(17, join)
 
         default:
             ERROR("Invalid syscalls %llu from process %llu", number, scheduler::get_current_process());

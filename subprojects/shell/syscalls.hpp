@@ -20,6 +20,7 @@ enum class Sys : int64_t {
     Fork = 14,
     GetCwd = 15,
     SetCwd = 16,
+    Join = 17,
 };
 
 template <const Sys S>
@@ -206,7 +207,7 @@ namespace sys {
         return syscall<Sys::Poll>(reinterpret_cast<uint64_t>(fds), count, reset_signalled ? 1 : 0, reinterpret_cast<uint64_t>(&mask)) >= 0;
     }
 
-    inline bool fork(uint64_t& pid) {
+    inline bool fork(uint32_t& pid) {
         const auto result = syscall<Sys::Fork>();
         pid = static_cast<uint64_t>(result);
         return result >= 0;
@@ -219,5 +220,9 @@ namespace sys {
 
     inline bool set_cwd(const char* path) {
         return syscall<Sys::SetCwd>(reinterpret_cast<uint64_t>(path)) >= 0;
+    }
+
+    inline uint64_t join(const uint32_t pid) {
+        return syscall<Sys::Join>(pid);
     }
 } // namespace sys

@@ -7,6 +7,9 @@ namespace cosmos::scheduler {
     struct Event;
 
     struct Process {
+        ProcessId id;
+        uint32_t ref_count;
+
         ProcessFn fn;
         Land land;
 
@@ -20,6 +23,8 @@ namespace cosmos::scheduler {
 
         uint64_t user_stack_phys;
 
+        Process* joining_with;
+
         vfs::File** event_files;
         uint32_t event_count;
         bool event_signalled;
@@ -28,6 +33,8 @@ namespace cosmos::scheduler {
 
         stl::FixedList<vfs::File*, 64, nullptr> fd_table;
     };
+
+    Process* get_process(ProcessId id);
 
     struct Event {
         void (*close_fn)(uint64_t data);

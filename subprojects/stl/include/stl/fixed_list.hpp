@@ -137,8 +137,7 @@ namespace stl {
             items[index] = EMPTY;
 
             if (index == max_count - 1) {
-                for (size_t i = 0; i < max_count; i++) {
-                    if (items[max_count - 1 - i] != EMPTY) break;
+                while (max_count > 0 && items[max_count - 1] == EMPTY) {
                     max_count--;
                 }
             }

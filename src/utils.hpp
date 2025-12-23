@@ -34,6 +34,7 @@ namespace cosmos::utils {
     constexpr uint32_t MSR_LSTAR = 0xC0000082;
     constexpr uint32_t MSR_SFMASK = 0xC0000084;
     constexpr uint32_t MSR_KERNEL_GS_BASE = 0xC0000102;
+    constexpr uint32_t MSR_GS_BASE = 0xC0000101;
 
     inline uint64_t msr_read(const uint32_t msr) {
         uint32_t lo;

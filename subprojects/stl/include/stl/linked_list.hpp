@@ -88,7 +88,7 @@ namespace stl {
             return insert_after_alloc(it.node, additional_size);
         }
 
-        void remove_free(Node* prev, Node* current) {
+        void remove(Node* prev, Node* current) {
             if (prev != nullptr) {
                 prev->next = current->next;
             }
@@ -100,6 +100,30 @@ namespace stl {
                 tail = prev;
             }
 
+            current->next = nullptr;
+        }
+
+        Node* remove(Iterator& it) {
+            const auto next = it.node->next;
+            remove(it.prev, it.node);
+            const auto node = it.node;
+            it.node = next;
+            return node;
+        }
+
+        bool remove(T* item) {
+            for (auto it = begin(); it != end(); ++it) {
+                if (*it == item) {
+                    remove_free(it);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        void remove_free(Node* prev, Node* current) {
+            remove(prev, current);
             free(current);
         }
 

@@ -110,7 +110,7 @@ namespace cosmos::scheduler {
         if (count > 64) return 0;
         asm volatile("cli" ::: "memory");
 
-        const auto process = reinterpret_cast<Process*>(get_current_process());
+        const auto process = get_process(get_current_process());
 
         for (auto i = 0u; i < count; i++) {
             if (event_files[i] == nullptr) continue;

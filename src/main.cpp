@@ -89,7 +89,7 @@ void main() {
 
     scheduler::StackFrame frame;
     scheduler::setup_dummy_frame(frame, init);
-    scheduler::create_process(init, space, scheduler::Land::Kernel, frame, "/");
+    scheduler::create_process(init, space, scheduler::Land::Kernel, false, frame, "/");
 
     scheduler::run();
 
