@@ -111,9 +111,9 @@ namespace stl {
             return node;
         }
 
-        bool remove(T* item) {
+        bool remove(T item) {
             for (auto it = begin(); it != end(); ++it) {
-                if (*it == item) {
+                if (**it == item) {
                     remove_free(it);
                     return true;
                 }

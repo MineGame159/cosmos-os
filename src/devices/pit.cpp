@@ -1,9 +1,9 @@
 #include "pit.hpp"
 
 #include "interrupts/isr.hpp"
-#include "scheduler/event.hpp"
-#include "scheduler/scheduler.hpp"
 #include "stl/fixed_list.hpp"
+#include "task/event.hpp"
+#include "task/scheduler.hpp"
 #include "utils.hpp"
 #include "vfs/devfs.hpp"
 
@@ -70,7 +70,7 @@ namespace cosmos::devices::pit {
             if (index == -1) return 0;
 
             uint32_t fd;
-            const auto event_file = scheduler::create_event(event_close, index, fd);
+            const auto event_file = task::create_event(event_close, index, fd).value();
 
             if (event_file == nullptr) {
                 return fd;

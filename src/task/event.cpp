@@ -1,9 +1,9 @@
 #include "event.hpp"
 
 #include "memory/heap.hpp"
-#include "private.hpp"
+#include "scheduler.hpp"
 
-namespace cosmos::scheduler {
+namespace cosmos::task {
     static uint64_t event_seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
         return 0;
     }
@@ -56,12 +56,12 @@ namespace cosmos::scheduler {
 
     // Header
 
-    vfs::File* create_event(void (*close_fn)(uint64_t data), const uint64_t close_data, uint32_t& fd) {
+    stl::PtrOptional<vfs::File*> create_event(void (*close_fn)(uint64_t data), const uint64_t close_data, uint32_t& fd) {
         const auto file = static_cast<vfs::File*>(memory::heap::alloc(sizeof(vfs::File) + sizeof(Event), alignof(vfs::File)));
 
         if (file == nullptr) {
             fd = 0xFFFFFFFF;
-            return nullptr;
+            return {};
         }
 
         file->ops = &event_ops;
@@ -71,11 +71,11 @@ namespace cosmos::scheduler {
         file->mode = vfs::Mode::ReadWrite;
         file->cursor = 0;
 
-        fd = add_fd(get_current_process(), file);
+        fd = get_current_process()->add_fd(file).value_or(0xFFFFFFFF);
 
         if (fd == 0xFFFFFFFF) {
             memory::heap::free(file);
-            return nullptr;
+            return {};
         }
 
         const auto event = reinterpret_cast<Event*>(file + 1);
@@ -110,7 +110,7 @@ namespace cosmos::scheduler {
         if (count > 64) return 0;
         asm volatile("cli" ::: "memory");
 
-        const auto process = get_process(get_current_process());
+        const auto process = get_current_process();
 
         for (auto i = 0u; i < count; i++) {
             if (event_files[i] == nullptr) continue;
@@ -144,4 +144,4 @@ namespace cosmos::scheduler {
         asm volatile("sti" ::: "memory");
         return mask;
     }
-} // namespace cosmos::scheduler
+} // namespace cosmos::task

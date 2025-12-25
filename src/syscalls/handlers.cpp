@@ -1,8 +1,8 @@
 #include "log/log.hpp"
 #include "memory/heap.hpp"
 #include "memory/offsets.hpp"
-#include "scheduler/event.hpp"
-#include "scheduler/scheduler.hpp"
+#include "task/event.hpp"
+#include "task/scheduler.hpp"
 #include "utils.hpp"
 #include "vfs/path.hpp"
 #include "vfs/vfs.hpp"
@@ -32,12 +32,12 @@ namespace cosmos::syscalls {
     // Syscall handlers
 
     int64_t exit(const uint64_t status) {
-        scheduler::exit(status);
+        task::exit(status);
         return 0;
     }
 
     int64_t yield() {
-        scheduler::yield();
+        task::yield();
         return 0;
     }
 
@@ -47,9 +47,9 @@ namespace cosmos::syscalls {
 
         const auto path = get_string_view(path_);
         const auto stat = reinterpret_cast<vfs::Stat*>(stat_);
-        const auto pid = scheduler::get_current_process();
+        const auto process = task::get_current_process();
 
-        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+        const auto abs_path = vfs::resolve(process->cwd, path);
         const auto result = vfs::stat(abs_path, *stat);
 
         free_string(abs_path);
@@ -59,9 +59,9 @@ namespace cosmos::syscalls {
     int64_t open(const uint64_t path_, const uint64_t mode_) {
         const auto path = get_string_view(path_);
         const auto mode = static_cast<vfs::Mode>(mode_);
-        const auto pid = scheduler::get_current_process();
+        const auto process = task::get_current_process();
 
-        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+        const auto abs_path = vfs::resolve(process->cwd, path);
 
         const auto file = vfs::open(abs_path, mode);
         if (file == nullptr) {
@@ -69,22 +69,20 @@ namespace cosmos::syscalls {
             return -1;
         }
 
-        const auto fd = scheduler::add_fd(pid, file);
-        if (fd == 0xFFFFFFFF) {
+        const auto fd = process->add_fd(file);
+        if (fd.is_empty()) {
             vfs::close(file);
             free_string(abs_path);
             return -1;
         }
 
         free_string(abs_path);
-        return fd;
+        return fd.value();
     }
 
     int64_t close(const uint64_t fd) {
-        const auto pid = scheduler::get_current_process();
-
-        const auto file = scheduler::remove_fd(pid, fd);
-        if (file == nullptr) return -1;
+        const auto process = task::get_current_process();
+        OPT_VAR_CHECK(file, process->remove_fd(fd), -1);
 
         vfs::close(file);
         return 0;
@@ -93,10 +91,9 @@ namespace cosmos::syscalls {
     int64_t seek(const uint64_t fd, const uint64_t type_, const uint64_t offset_) {
         const auto type = static_cast<vfs::SeekType>(type_);
         const auto offset = static_cast<int64_t>(offset_);
-        const auto pid = scheduler::get_current_process();
 
-        const auto file = scheduler::get_file(pid, fd);
-        if (file == nullptr) return -1;
+        const auto process = task::get_current_process();
+        OPT_VAR_CHECK(file, process->get_file(fd), -1);
 
         return file->ops->seek(file, type, offset);
     }
@@ -106,13 +103,11 @@ namespace cosmos::syscalls {
         if (memory::virt::is_invalid_user(buffer_ + length - 1)) return -1;
 
         const auto buffer = reinterpret_cast<void*>(buffer_);
-        const auto pid = scheduler::get_current_process();
 
-        const auto file = scheduler::get_file(pid, fd);
-        if (file == nullptr) return -1;
+        const auto process = task::get_current_process();
+        OPT_VAR_CHECK(file, process->get_file(fd), -1);
 
-        const auto a = file->ops->read(file, buffer, length);
-        return a;
+        return file->ops->read(file, buffer, length);
     }
 
     int64_t write(const uint64_t fd, const uint64_t buffer_, const uint64_t length) {
@@ -120,28 +115,25 @@ namespace cosmos::syscalls {
         if (memory::virt::is_invalid_user(buffer_ + length - 1)) return -1;
 
         const auto buffer = reinterpret_cast<const void*>(buffer_);
-        const auto pid = scheduler::get_current_process();
 
-        const auto file = scheduler::get_file(pid, fd);
-        if (file == nullptr) return -1;
+        const auto process = task::get_current_process();
+        OPT_VAR_CHECK(file, process->get_file(fd), -1);
 
         return file->ops->write(file, buffer, length);
     }
 
     int64_t ioctl(const uint64_t fd, const uint64_t op, const uint64_t arg) {
-        const auto pid = scheduler::get_current_process();
-
-        const auto file = scheduler::get_file(pid, fd);
-        if (file == nullptr) return -1;
+        const auto process = task::get_current_process();
+        OPT_VAR_CHECK(file, process->get_file(fd), -1);
 
         return file->ops->ioctl(file, op, arg);
     }
 
     int64_t create_dir(const uint64_t path_) {
         const auto path = get_string_view(path_);
-        const auto pid = scheduler::get_current_process();
+        const auto process = task::get_current_process();
 
-        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+        const auto abs_path = vfs::resolve(process->cwd, path);
 
         const auto result = vfs::create_dir(abs_path);
 
@@ -151,9 +143,9 @@ namespace cosmos::syscalls {
 
     int64_t remove(const uint64_t path_) {
         const auto path = get_string_view(path_);
-        const auto pid = scheduler::get_current_process();
+        const auto process = task::get_current_process();
 
-        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+        const auto abs_path = vfs::resolve(process->cwd, path);
 
         const auto result = vfs::remove(abs_path);
 
@@ -166,8 +158,8 @@ namespace cosmos::syscalls {
         const auto filesystem_name = get_string_view(filesystem_name_);
         const auto device_path = get_string_view(device_path_);
 
-        const auto pid = scheduler::get_current_process();
-        const auto cwd = scheduler::get_cwd(pid);
+        const auto process = task::get_current_process();
+        const auto cwd = process->cwd;
 
         const auto abs_target_path = vfs::resolve(cwd, target_path);
         const auto abs_device_path = vfs::resolve(cwd, device_path);
@@ -178,8 +170,9 @@ namespace cosmos::syscalls {
     int64_t eventfd() {
         uint32_t fd;
 
-        const auto event_file = scheduler::create_event(nullptr, 0, fd);
-        if (event_file == nullptr) return -1;
+        if (task::create_event(nullptr, 0, fd).is_empty()) {
+            return -1;
+        }
 
         return fd;
     }
@@ -195,28 +188,29 @@ namespace cosmos::syscalls {
         const auto fds = reinterpret_cast<uint32_t*>(fds_);
         const auto reset_signalled = reset_signalled_ != 0;
         const auto mask = reinterpret_cast<uint64_t*>(mask_);
-        const auto pid = scheduler::get_current_process();
+        const auto process = task::get_current_process();
 
         vfs::File* event_files[64];
 
         for (auto i = 0u; i < count; i++) {
-            event_files[i] = scheduler::get_file(pid, fds[i]);
+            event_files[i] = process->get_file(fds[i]).value();
         }
 
-        *mask = scheduler::wait_on_events(event_files, count, reset_signalled);
+        *mask = task::wait_on_events(event_files, count, reset_signalled);
         return 0;
     }
 
-    int64_t fork(const scheduler::StackFrame& frame) {
+    int64_t fork(const task::StackFrame& frame) {
         // Setup child stack frame
         auto child_frame = frame;
         child_frame.rax = 0;
 
         // Fork process
-        const auto pid = scheduler::get_current_process();
-        const auto child_pid = scheduler::fork(pid, child_frame);
+        const auto process = task::get_current_process();
+        OPT_VAR_CHECK(child_pid, process->fork(child_frame), -1);
 
-        return child_pid == 0 ? -1 : static_cast<int64_t>(child_pid);
+        task::enqueue(child_pid);
+        return child_pid;
     }
 
     int64_t get_cwd(const uint64_t buffer_, const uint64_t length) {
@@ -224,9 +218,9 @@ namespace cosmos::syscalls {
         if (memory::virt::is_invalid_user(buffer_ + length - 1)) return -1;
 
         const auto buffer = reinterpret_cast<char*>(buffer_);
-        const auto pid = scheduler::get_current_process();
+        const auto process = task::get_current_process();
 
-        const auto cwd = scheduler::get_cwd(pid);
+        const auto cwd = process->cwd;
         if (length < cwd.size() + 1) return -1;
 
         utils::memcpy(buffer, cwd.data(), cwd.size());
@@ -237,27 +231,26 @@ namespace cosmos::syscalls {
 
     int64_t set_cwd(const uint64_t path_) {
         const auto path = get_string_view(path_);
-        const auto pid = scheduler::get_current_process();
+        const auto process = task::get_current_process();
 
-        const auto abs_path = vfs::resolve(scheduler::get_cwd(pid), path);
+        const auto abs_path = vfs::resolve(process->cwd, path);
 
         vfs::Stat stat;
         if (!vfs::stat(abs_path, stat) || stat.type != vfs::NodeType::Directory) return -1;
 
-        scheduler::set_cwd(pid, abs_path);
-        return 0;
+        return process->set_cwd(abs_path) ? 0 : -1;
     }
 
     uint64_t join(const uint64_t pid_) {
         if (pid_ > 0xFFFFFFFF) return 0xFFFFFFFFFFFFFFFF;
-        const auto pid = static_cast<scheduler::ProcessId>(pid_);
+        const auto pid = static_cast<task::ProcessId>(pid_);
 
-        return scheduler::join(pid);
+        return task::join(pid).value_or(0xFFFFFFFFFFFFFFFF);
     }
 
     // Handler
 
-    extern "C" void syscall_handler(const uint64_t number, scheduler::StackFrame* frame) {
+    extern "C" void syscall_handler(const uint64_t number, task::StackFrame* frame) {
 #define CASE_0(number, handler)                                                                                                            \
     case number:                                                                                                                           \
         frame->rax = handler();                                                                                                            \
@@ -312,7 +305,7 @@ namespace cosmos::syscalls {
             CASE_1(17, join)
 
         default:
-            ERROR("Invalid syscalls %llu from process %llu", number, scheduler::get_current_process());
+            ERROR("Invalid syscalls %llu from process %llu", number, task::get_current_process());
             frame->rax = -1;
             break;
         }

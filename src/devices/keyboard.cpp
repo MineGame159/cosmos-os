@@ -1,9 +1,9 @@
 #include "keyboard.hpp"
 
-#include "scheduler/event.hpp"
-#include "scheduler/scheduler.hpp"
 #include "stl/fixed_list.hpp"
 #include "stl/ring_buffer.hpp"
+#include "task/event.hpp"
+#include "task/scheduler.hpp"
 #include "vfs/devfs.hpp"
 
 namespace cosmos::devices::keyboard {
@@ -51,7 +51,7 @@ namespace cosmos::devices::keyboard {
             }
 
             uint32_t fd;
-            *event_file = scheduler::create_event(event_close, event_file_index, fd);
+            *event_file = task::create_event(event_close, event_file_index, fd).value();
 
             if (*event_file == nullptr) {
                 event_files.remove_at(event_file_index);

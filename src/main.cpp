@@ -16,9 +16,9 @@
 #include "memory/physical.hpp"
 #include "memory/virt_range_alloc.hpp"
 #include "memory/virtual.hpp"
-#include "scheduler/scheduler.hpp"
 #include "serial.hpp"
 #include "syscalls/init.hpp"
+#include "task/scheduler.hpp"
 #include "tss.hpp"
 #include "utils.hpp"
 #include "vfs/devfs.hpp"
@@ -53,9 +53,11 @@ void init() {
     INFO("Initialized");
 
     log::disable_display();
-    scheduler::create_process("/iso/shell", "/");
 
-    scheduler::exit(0);
+    const auto process = task::create_process("/iso/shell", "/");
+    task::enqueue(process.value());
+
+    task::exit(0);
 }
 
 extern "C" [[noreturn]]
@@ -87,11 +89,12 @@ void main() {
     memory::virt::init_range_alloc();
     syscalls::init();
 
-    scheduler::StackFrame frame;
-    scheduler::setup_dummy_frame(frame, init);
-    scheduler::create_process(init, space, scheduler::Land::Kernel, false, frame, "/");
+    task::StackFrame frame;
+    task::setup_dummy_frame(frame, init);
+    const auto process = task::create_process(space, task::Land::Kernel, false, frame, "/");
+    task::enqueue(process.value());
 
-    scheduler::run();
+    task::run();
 
     utils::halt();
 }

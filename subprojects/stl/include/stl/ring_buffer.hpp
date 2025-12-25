@@ -2,15 +2,13 @@
 
 #include "utils.hpp"
 
-
 #include <cstring>
 #include <type_traits>
 
 namespace stl {
     template <typename T, size_t N>
+        requires std::is_trivially_copyable_v<T>
     struct RingBuffer {
-        static_assert(std::is_trivially_copyable_v<T>, "RingBuffer requires T to be trivially copyable");
-
         T data[N];
 
         volatile size_t write_index = 0;
