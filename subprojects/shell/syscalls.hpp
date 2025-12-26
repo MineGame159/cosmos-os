@@ -17,10 +17,11 @@ enum class Sys : int64_t {
     Mount = 11,
     Eventfd = 12,
     Poll = 13,
-    Fork = 14,
-    GetCwd = 15,
-    SetCwd = 16,
-    Join = 17,
+    Pipe = 14,
+    Fork = 15,
+    GetCwd = 16,
+    SetCwd = 17,
+    Join = 18,
 };
 
 template <const Sys S>
@@ -205,6 +206,16 @@ namespace sys {
 
     inline bool poll(const uint32_t* fds, const uint64_t count, const bool reset_signalled, uint64_t& mask) {
         return syscall<Sys::Poll>(reinterpret_cast<uint64_t>(fds), count, reset_signalled ? 1 : 0, reinterpret_cast<uint64_t>(&mask)) >= 0;
+    }
+
+    inline bool pipe(uint32_t& read_fd, uint32_t& write_fd) {
+        uint32_t fds[2];
+        if (syscall<Sys::Pipe>(reinterpret_cast<uint64_t>(fds)) < 0) return false;
+
+        read_fd = fds[0];
+        write_fd = fds[1];
+
+        return true;
     }
 
     inline bool fork(uint32_t& pid) {

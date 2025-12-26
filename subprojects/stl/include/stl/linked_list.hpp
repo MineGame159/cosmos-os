@@ -2,7 +2,6 @@
 
 #include "mem.hpp"
 
-
 #include <cstddef>
 
 namespace stl {

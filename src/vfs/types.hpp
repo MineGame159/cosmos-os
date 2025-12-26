@@ -71,7 +71,7 @@ namespace cosmos::vfs {
         uint64_t (*ioctl)(File* file, uint64_t op, uint64_t arg);
     };
 
-    using CloseFn = void (*)(File* file);
+    using FileFn = void (*)(File* file);
 
     enum class Mode : uint8_t {
         Read,
@@ -89,7 +89,8 @@ namespace cosmos::vfs {
 
     struct File {
         const FileOps* ops;
-        CloseFn on_close;
+        FileFn on_close;
+        FileFn on_duplicate;
 
         Node* node;
 

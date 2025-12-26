@@ -2,6 +2,7 @@
 #include "memory/heap.hpp"
 #include "memory/offsets.hpp"
 #include "task/event.hpp"
+#include "task/pipe.hpp"
 #include "task/scheduler.hpp"
 #include "utils.hpp"
 #include "vfs/path.hpp"
@@ -200,6 +201,39 @@ namespace cosmos::syscalls {
         return 0;
     }
 
+    int64_t pipe(const uint64_t fds_) {
+        if (memory::virt::is_invalid_user(fds_)) return -1;
+        if (memory::virt::is_invalid_user(fds_ + 2 * sizeof(uint32_t))) return -1;
+
+        const auto fds = reinterpret_cast<uint32_t*>(fds_);
+
+        // Create pipe files
+        vfs::File* read_file;
+        vfs::File* write_file;
+
+        if (!task::create_pipe(read_file, write_file)) {
+            return -1;
+        }
+
+        // Allocate FDs
+        const auto process = task::get_current_process();
+
+        const auto read_fd = process->add_fd(read_file);
+        const auto write_fd = process->add_fd(write_file);
+
+        if (read_fd.is_empty() || write_fd.is_empty()) {
+            vfs::close(read_file);
+            vfs::close(write_file);
+            return -1;
+        }
+
+        // Return
+        fds[0] = read_fd.value();
+        fds[1] = write_fd.value();
+
+        return 0;
+    }
+
     int64_t fork(const task::StackFrame& frame) {
         // Setup child stack frame
         auto child_frame = frame;
@@ -295,14 +329,15 @@ namespace cosmos::syscalls {
             CASE_3(11, mount)
             CASE_0(12, eventfd)
             CASE_4(13, poll)
+            CASE_1(14, pipe)
 
-        case 14:
+        case 15:
             frame->rax = fork(*frame);
             break;
 
-            CASE_2(15, get_cwd)
-            CASE_1(16, set_cwd)
-            CASE_1(17, join)
+            CASE_2(16, get_cwd)
+            CASE_1(17, set_cwd)
+            CASE_1(18, join)
 
         default:
             ERROR("Invalid syscalls %llu from process %llu", number, task::get_current_process());

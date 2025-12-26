@@ -7,6 +7,7 @@
 
 namespace stl {
     template <Equatable T, const size_t N, const T EMPTY>
+        requires std::is_trivially_copyable_v<T>
     struct FixedList {
         struct Iterator {
             const T* items;

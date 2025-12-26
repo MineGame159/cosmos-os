@@ -29,6 +29,7 @@ sources = [
     'src/syscalls/handlers.cpp',
     'src/task/process.cpp',
     'src/task/event.cpp',
+    'src/task/pipe.cpp',
     'src/task/scheduler.cpp',
     'src/acpi/uacpi.cpp',
     'src/acpi/acpi.cpp',

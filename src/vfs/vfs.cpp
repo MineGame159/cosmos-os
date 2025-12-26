@@ -189,6 +189,7 @@ namespace cosmos::vfs {
         const auto file = memory::heap::alloc<File>();
         file->ops = ops;
         file->on_close = nullptr;
+        file->on_duplicate = nullptr;
         file->node = node;
         file->ref_count = 1;
         file->mode = mode;
@@ -247,6 +248,7 @@ namespace cosmos::vfs {
         const auto file = memory::heap::alloc<File>(sizeof(stl::LinkedList<Node>::Iterator));
         file->ops = &dir_ops;
         file->on_close = nullptr;
+        file->on_duplicate = nullptr;
         file->node = node;
         file->ref_count = 1;
         file->mode = mode;
@@ -285,6 +287,10 @@ namespace cosmos::vfs {
     }
 
     File* duplicate(File* file) {
+        if (file->on_duplicate != nullptr) {
+            file->on_duplicate(file);
+        }
+
         file->ref_count++;
         return file;
     }

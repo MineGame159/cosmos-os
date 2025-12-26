@@ -66,6 +66,7 @@ namespace cosmos::task {
 
         file->ops = &event_ops;
         file->on_close = event_close;
+        file->on_duplicate = nullptr;
         file->node = nullptr;
         file->ref_count = 1;
         file->mode = vfs::Mode::ReadWrite;
