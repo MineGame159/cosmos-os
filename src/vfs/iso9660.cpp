@@ -164,14 +164,14 @@ namespace cosmos::vfs::iso9660 {
 
     // FileOps
 
-    uint64_t file_seek(File* file, const SeekType type, const int64_t offset) {
+    uint64_t file_seek(const stl::Rc<File>& file, const SeekType type, const int64_t offset) {
         const auto node_info = reinterpret_cast<NodeInfo*>(file->node + 1);
         file->seek(node_info->data_size, type, offset);
         return file->cursor;
     }
 
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
-    uint64_t file_read(File* file, void* buffer, const uint64_t length) {
+    uint64_t file_read(const stl::Rc<File>& file, void* buffer, const uint64_t length) {
         const auto fs_info = static_cast<FsInfo*>(file->node->fs_handle);
         const auto node_info = reinterpret_cast<NodeInfo*>(file->node + 1);
 
@@ -184,7 +184,7 @@ namespace cosmos::vfs::iso9660 {
         return read;
     }
 
-    uint64_t file_ioctl([[maybe_unused]] File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+    uint64_t file_ioctl([[maybe_unused]] const stl::Rc<File>& file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
         return IOCTL_UNKNOWN;
     }
 
@@ -322,7 +322,7 @@ namespace cosmos::vfs::iso9660 {
     bool init(Node* node, const stl::StringView device_path) {
         // Open device
         const auto device = open(device_path, Mode::Read);
-        if (device == nullptr) return false;
+        if (!device.valid()) return false;
 
         // Find PVD
         const auto descriptor = memory::heap::alloc(2048);
@@ -349,7 +349,7 @@ namespace cosmos::vfs::iso9660 {
 
         // Create filesystem info
         const auto fs_info = memory::heap::alloc<FsInfo>();
-        fs_info->device = device;
+        fs_info->device = device.ref();
         fs_info->block_size = pvd->logical_block_size;
         fs_info->uses_susp = false;
 

@@ -60,6 +60,21 @@ void init() {
     task::exit(0);
 }
 
+static void spawn(const memory::virt::Space space, const task::ProcessFn fn) {
+    stl::Optional<task::ProcessId> process;
+
+    if (space == 0) {
+        process = task::create_process(fn, task::Land::Kernel, "/");
+    } else {
+        task::StackFrame frame;
+        task::setup_dummy_frame(frame, fn);
+
+        process = task::create_process(space, task::Land::Kernel, false, frame, "/");
+    }
+
+    task::enqueue(process.value());
+}
+
 extern "C" [[noreturn]]
 void main() {
     asm volatile("cli" ::: "memory");
@@ -89,10 +104,8 @@ void main() {
     memory::virt::init_range_alloc();
     syscalls::init();
 
-    task::StackFrame frame;
-    task::setup_dummy_frame(frame, init);
-    const auto process = task::create_process(space, task::Land::Kernel, false, frame, "/");
-    task::enqueue(process.value());
+    spawn(space, task::reaper_process);
+    spawn(0, init);
 
     task::run();
 

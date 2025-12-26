@@ -3,6 +3,7 @@
 #include "memory/virtual.hpp"
 #include "stl/fixed_list.hpp"
 #include "stl/optional.hpp"
+#include "stl/rc.hpp"
 #include "vfs/types.hpp"
 
 namespace cosmos::task {
@@ -39,7 +40,7 @@ namespace cosmos::task {
 
     struct Process {
         ProcessId id;
-        uint32_t ref_count;
+        size_t ref_count;
 
         Land land;
 
@@ -55,7 +56,7 @@ namespace cosmos::task {
 
         Process* joining_with;
 
-        vfs::File** event_files;
+        const stl::Rc<vfs::File>* event_files;
         uint32_t event_count;
         bool event_signalled;
 
@@ -65,24 +66,26 @@ namespace cosmos::task {
 
         // Methods
 
-        ProcessId ref();
-        void unref();
-
         bool set_cwd(stl::StringView path);
 
-        stl::Optional<uint32_t> add_fd(vfs::File* file);
-        stl::PtrOptional<vfs::File*> get_file(uint32_t fd) const;
-        stl::PtrOptional<vfs::File*> remove_fd(uint32_t fd);
+        stl::Optional<uint32_t> add_fd(const stl::Rc<vfs::File>& file);
+        stl::Rc<vfs::File> get_file(uint32_t fd) const;
+        stl::Rc<vfs::File> remove_fd(uint32_t fd);
 
         stl::Optional<ProcessId> fork(const StackFrame& frame) const;
+
+        void destroy();
     };
 
     void setup_dummy_frame(StackFrame& frame, ProcessFn fn);
 
+    [[noreturn]]
+    void reaper_process();
+
     stl::Optional<ProcessId> create_process(memory::virt::Space space, Land land, bool alloc_user_stack, const StackFrame& frame,
-                                              stl::StringView cwd);
+                                            stl::StringView cwd);
     stl::Optional<ProcessId> create_process(ProcessFn fn, Land land, stl::StringView cwd);
     stl::Optional<ProcessId> create_process(stl::StringView path, stl::StringView cwd);
 
-    stl::PtrOptional<Process*> get_process(ProcessId id);
+    stl::Rc<Process> get_process(ProcessId id);
 } // namespace cosmos::task

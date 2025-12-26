@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stl/linked_list.hpp"
+#include "stl/rc.hpp"
 #include "stl/string_view.hpp"
 
 #include <cstdint>
@@ -64,13 +65,6 @@ namespace cosmos::vfs {
     constexpr uint64_t IOCTL_OK = 0;
     constexpr uint64_t IOCTL_UNKNOWN = UINT64_MAX;
 
-    struct FileOps {
-        uint64_t (*seek)(File* file, SeekType type, int64_t offset);
-        uint64_t (*read)(File* file, void* buffer, uint64_t length);
-        uint64_t (*write)(File* file, const void* buffer, uint64_t length);
-        uint64_t (*ioctl)(File* file, uint64_t op, uint64_t arg);
-    };
-
     using FileFn = void (*)(File* file);
 
     enum class Mode : uint8_t {
@@ -88,13 +82,12 @@ namespace cosmos::vfs {
     }
 
     struct File {
+        size_t ref_count;
+
         const FileOps* ops;
         FileFn on_close;
-        FileFn on_duplicate;
 
         Node* node;
-
-        uint32_t ref_count;
 
         Mode mode;
         uint64_t cursor;
@@ -114,6 +107,15 @@ namespace cosmos::vfs {
 
             if (cursor >= data_size) cursor = data_size;
         }
+
+        void destroy();
+    };
+
+    struct FileOps {
+        uint64_t (*seek)(const stl::Rc<File>& file, SeekType type, int64_t offset);
+        uint64_t (*read)(const stl::Rc<File>& file, void* buffer, uint64_t length);
+        uint64_t (*write)(const stl::Rc<File>& file, const void* buffer, uint64_t length);
+        uint64_t (*ioctl)(const stl::Rc<File>& file, uint64_t op, uint64_t arg);
     };
 
     // DirEntry

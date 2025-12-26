@@ -133,14 +133,14 @@ namespace cosmos::devices::atapio {
         }
     };
 
-    uint64_t seek(vfs::File* file, const vfs::SeekType type, const int64_t offset) {
+    uint64_t seek(const stl::Rc<vfs::File>& file, const vfs::SeekType type, const int64_t offset) {
         const auto drive = static_cast<Drive*>(file->node->fs_handle);
 
         file->seek(drive->size(), type, offset);
         return file->cursor;
     }
 
-    uint64_t read(vfs::File* file, void* buffer, uint64_t length) {
+    uint64_t read(const stl::Rc<vfs::File>& file, void* buffer, uint64_t length) {
         const auto drive = static_cast<Drive*>(file->node->fs_handle);
 
         // Calculate LBA and sector count
@@ -246,7 +246,7 @@ namespace cosmos::devices::atapio {
         return read;
     }
 
-    uint64_t ioctl([[maybe_unused]] vfs::File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+    uint64_t ioctl([[maybe_unused]] const stl::Rc<vfs::File>& file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
         return vfs::IOCTL_UNKNOWN;
     }
 

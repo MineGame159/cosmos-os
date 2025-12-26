@@ -179,19 +179,17 @@ namespace cosmos::vfs {
         return true;
     }
 
-    static File* open_file(Node* node, const Mode mode) {
+    static stl::Rc<File> open_file(Node* node, const Mode mode) {
         const auto ops = node->fs_ops->open(node, mode);
         if (ops == nullptr) return nullptr;
 
         if (is_read(mode)) node->open_read++;
         if (is_write(mode)) node->open_write++;
 
-        const auto file = memory::heap::alloc<File>();
+        const auto file = stl::Rc<File>::alloc();
         file->ops = ops;
         file->on_close = nullptr;
-        file->on_duplicate = nullptr;
         file->node = node;
-        file->ref_count = 1;
         file->mode = mode;
         file->cursor = 0;
 
@@ -199,14 +197,14 @@ namespace cosmos::vfs {
     }
 
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
-    static uint64_t dir_seek(File* file, [[maybe_unused]] SeekType type, [[maybe_unused]] int64_t offset) {
+    static uint64_t dir_seek(const stl::Rc<File>& file, [[maybe_unused]] SeekType type, [[maybe_unused]] int64_t offset) {
         return file->cursor;
     }
 
-    static uint64_t dir_read(File* file, void* buffer, const uint64_t length) {
+    static uint64_t dir_read(const stl::Rc<File>& file, void* buffer, const uint64_t length) {
         if (length != sizeof(DirEntry)) return 0;
 
-        const auto it = reinterpret_cast<stl::LinkedList<Node>::Iterator*>(file + 1);
+        const auto it = reinterpret_cast<stl::LinkedList<Node>::Iterator*>(*file + 1);
 
         if (*it != stl::LinkedList<Node>::end()) {
             const auto node = *it;
@@ -223,11 +221,12 @@ namespace cosmos::vfs {
         return 0;
     }
 
-    static uint64_t dir_write([[maybe_unused]] File* file, [[maybe_unused]] const void* buffer, [[maybe_unused]] uint64_t length) {
+    static uint64_t dir_write([[maybe_unused]] const stl::Rc<File>& file, [[maybe_unused]] const void* buffer,
+                              [[maybe_unused]] uint64_t length) {
         return 0;
     }
 
-    static uint64_t dir_ioctl([[maybe_unused]] File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+    static uint64_t dir_ioctl([[maybe_unused]] const stl::Rc<File>& file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
         return IOCTL_UNKNOWN;
     }
 
@@ -238,29 +237,27 @@ namespace cosmos::vfs {
         .ioctl = dir_ioctl,
     };
 
-    static File* open_dir(Node* node, const Mode mode) {
+    static stl::Rc<File> open_dir(Node* node, const Mode mode) {
         if (is_write(mode)) return nullptr;
 
         if (!node->populated) node->fs_ops->populate(node);
 
         node->open_read++;
 
-        const auto file = memory::heap::alloc<File>(sizeof(stl::LinkedList<Node>::Iterator));
+        const auto file = stl::Rc<File>::alloc(sizeof(stl::LinkedList<Node>::Iterator));
         file->ops = &dir_ops;
         file->on_close = nullptr;
-        file->on_duplicate = nullptr;
         file->node = node;
-        file->ref_count = 1;
         file->mode = mode;
         file->cursor = 0;
 
-        const auto it = reinterpret_cast<stl::LinkedList<Node>::Iterator*>(file + 1);
+        const auto it = reinterpret_cast<stl::LinkedList<Node>::Iterator*>(*file + 1);
         *it = node->children.begin();
 
         return file;
     }
 
-    File* open(stl::StringView path, const Mode mode) {
+    stl::Rc<File> open(stl::StringView path, const Mode mode) {
         const auto length = check_abs_path(path);
         if (length == 0) return nullptr;
         path = path.substr(0, length);
@@ -284,40 +281,6 @@ namespace cosmos::vfs {
         }
 
         return nullptr;
-    }
-
-    File* duplicate(File* file) {
-        if (file->on_duplicate != nullptr) {
-            file->on_duplicate(file);
-        }
-
-        file->ref_count++;
-        return file;
-    }
-
-    void close(File* file) {
-        if (file->ref_count == 0) {
-            ERROR("File reference count is 0, double close detected");
-            return;
-        }
-
-        if (file->ref_count > 1) {
-            file->ref_count--;
-            return;
-        }
-
-        if (file->node != nullptr) {
-            if (is_read(file->mode)) file->node->open_read--;
-            if (is_write(file->mode)) file->node->open_write--;
-
-            file->node->fs_ops->on_close(file);
-        }
-
-        if (file->on_close != nullptr) {
-            file->on_close(file);
-        }
-
-        memory::heap::free(file);
     }
 
     bool create_dir(stl::StringView path) {
@@ -355,5 +318,22 @@ namespace cosmos::vfs {
         }
 
         return node->fs_ops->destroy(node);
+    }
+
+    // File
+
+    void File::destroy() {
+        if (node != nullptr) {
+            if (is_read(mode)) node->open_read--;
+            if (is_write(mode)) node->open_write--;
+
+            node->fs_ops->on_close(this);
+        }
+
+        if (on_close != nullptr) {
+            on_close(this);
+        }
+
+        memory::heap::free(this);
     }
 } // namespace cosmos::vfs

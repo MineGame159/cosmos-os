@@ -6,14 +6,15 @@
 namespace cosmos::task {
     // File operations
 
-    static uint64_t pipe_seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
+    static uint64_t pipe_seek([[maybe_unused]] const stl::Rc<vfs::File>& file, [[maybe_unused]] vfs::SeekType type,
+                              [[maybe_unused]] int64_t offset) {
         return 0;
     }
 
-    static uint64_t pipe_read(vfs::File* file, void* buffer, const uint64_t length) {
+    static uint64_t pipe_read(const stl::Rc<vfs::File>& file, void* buffer, const uint64_t length) {
         if (!vfs::is_read(file->mode)) return 0;
 
-        const auto pipe = *reinterpret_cast<Pipe**>(file + 1);
+        const auto pipe = *reinterpret_cast<Pipe**>(*file + 1);
 
         while (pipe->buffer.size() == 0) {
             uint64_t count;
@@ -26,10 +27,10 @@ namespace cosmos::task {
         return pipe->buffer.try_get(static_cast<uint8_t*>(buffer), length);
     }
 
-    static uint64_t pipe_write(vfs::File* file, const void* buffer, uint64_t length) {
+    static uint64_t pipe_write(const stl::Rc<vfs::File>& file, const void* buffer, uint64_t length) {
         if (!vfs::is_write(file->mode)) return 0;
 
-        const auto pipe = *reinterpret_cast<Pipe**>(file + 1);
+        const auto pipe = *reinterpret_cast<Pipe**>(*file + 1);
 
         auto bytes = static_cast<const uint8_t*>(buffer);
         uint64_t written = 0;
@@ -54,7 +55,8 @@ namespace cosmos::task {
         return written;
     }
 
-    static uint64_t pipe_ioctl([[maybe_unused]] vfs::File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+    static uint64_t pipe_ioctl([[maybe_unused]] const stl::Rc<vfs::File>& file, [[maybe_unused]] uint64_t op,
+                               [[maybe_unused]] uint64_t arg) {
         return vfs::IOCTL_UNKNOWN;
     }
 
@@ -78,35 +80,25 @@ namespace cosmos::task {
         }
     }
 
-    static void pipe_duplicate(vfs::File* file) {
-        const auto pipe = *reinterpret_cast<Pipe**>(file + 1);
-
-        if (vfs::is_read(file->mode)) __atomic_add_fetch(&pipe->reader_count, 1, __ATOMIC_RELAXED);
-        if (vfs::is_write(file->mode)) __atomic_add_fetch(&pipe->writer_count, 1, __ATOMIC_RELAXED);
-
-        __atomic_add_fetch(&pipe->ref_count, 1, __ATOMIC_RELAXED);
-    }
-
     // Header
 
-    bool create_pipe(vfs::File*& read_file, vfs::File*& write_file) {
+    bool create_pipe(stl::Rc<vfs::File>& read_file, stl::Rc<vfs::File>& write_file) {
         // Allocate pipe
         const auto pipe = memory::heap::alloc<Pipe>();
         if (pipe == nullptr) return false;
 
         // Allocate read file
-        read_file = memory::heap::alloc<vfs::File>(sizeof(Pipe*));
+        read_file = stl::Rc<vfs::File>::alloc(sizeof(Pipe*));
 
-        if (read_file == nullptr) {
+        if (!read_file.valid()) {
             memory::heap::free(pipe);
             return false;
         }
 
         // Allocate write file
-        write_file = memory::heap::alloc<vfs::File>(sizeof(Pipe*));
+        write_file = stl::Rc<vfs::File>::alloc(sizeof(Pipe*));
 
-        if (write_file == nullptr) {
-            memory::heap::free(read_file);
+        if (!write_file.valid()) {
             memory::heap::free(pipe);
             return false;
         }
@@ -120,24 +112,20 @@ namespace cosmos::task {
         // Fill read file
         read_file->ops = &pipe_ops;
         read_file->on_close = pipe_close;
-        read_file->on_duplicate = pipe_duplicate;
         read_file->node = nullptr;
-        read_file->ref_count = 1;
         read_file->mode = vfs::Mode::Read;
         read_file->cursor = 0;
 
-        *reinterpret_cast<Pipe**>(read_file + 1) = pipe;
+        *reinterpret_cast<Pipe**>(*read_file + 1) = pipe;
 
         // Fill write file
         write_file->ops = &pipe_ops;
         write_file->on_close = pipe_close;
-        write_file->on_duplicate = pipe_duplicate;
         write_file->node = nullptr;
-        write_file->ref_count = 1;
         write_file->mode = vfs::Mode::Write;
         write_file->cursor = 0;
 
-        *reinterpret_cast<Pipe**>(write_file + 1) = pipe;
+        *reinterpret_cast<Pipe**>(*write_file + 1) = pipe;
 
         return true;
     }

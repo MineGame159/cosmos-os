@@ -1,5 +1,6 @@
 #pragma once
 
+#include "stl/rc.hpp"
 #include "stl/ring_buffer.hpp"
 #include "vfs/types.hpp"
 
@@ -16,5 +17,5 @@ namespace cosmos::task {
 
     /// Creates a unidirectional pipe with two "ends".
     /// Each "end" will block if there is either no data to be read or if the pipe is full.
-    bool create_pipe(vfs::File*& read_file, vfs::File*& write_file);
+    bool create_pipe(stl::Rc<vfs::File>& read_file, stl::Rc<vfs::File>& write_file);
 } // namespace cosmos::task

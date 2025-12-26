@@ -26,6 +26,24 @@ namespace cosmos::task {
         frame.user_rsp = memory::virt::LOWER_HALF_END;
     }
 
+    void yield();
+
+    void reaper_process() {
+        for (;;) {
+            for (auto it = processes.begin(); it != processes.end(); ++it) {
+                const auto process = *it;
+
+                if (process->ref_count == 1) {
+                    DEBUG("Destroying process %lu", process->id);
+                    processes.remove(it);
+                    process->destroy();
+                }
+            }
+
+            yield();
+        }
+    }
+
     stl::Optional<ProcessId> create_process(const memory::virt::Space space, const Land land, const bool alloc_user_stack,
                                             const StackFrame& frame, const stl::StringView cwd) {
         // Allocate id
@@ -161,7 +179,7 @@ namespace cosmos::task {
         // Open file
         const auto file = vfs::open(path, vfs::Mode::Read);
 
-        if (file == nullptr) {
+        if (!file.valid()) {
             ERROR("Failed to open file");
             return {};
         }
@@ -170,7 +188,6 @@ namespace cosmos::task {
         const auto binary = elf::parse(file);
 
         if (binary == nullptr) {
-            vfs::close(file);
             return {};
         }
 
@@ -179,52 +196,29 @@ namespace cosmos::task {
 
         if (pid.is_empty()) {
             memory::heap::free(binary);
-            vfs::close(file);
             return {};
         }
 
-        INFO("Creating process %llu for file %s", pid.value(), path.data());
-        const auto process = get_process(pid.value()).value();
+        DEBUG("Creating process %lu for file %s", pid.value(), path.data());
+        const auto process = get_process(pid.value());
 
         // Load ELF binary
         if (!elf::load(process->space, file, binary)) {
             memory::heap::free(binary);
-            vfs::close(file);
             return {};
         }
 
         // Cleanup
         memory::heap::free(binary);
-        vfs::close(file);
 
         return pid;
     }
 
-    stl::PtrOptional<Process*> get_process(const ProcessId id) {
+    stl::Rc<Process> get_process(const ProcessId id) {
         return processes.get(id);
     }
 
-    ProcessId Process::ref() {
-        ref_count++;
-        return id;
-    }
-
-    void Process::unref() {
-        ref_count--;
-
-        if (ref_count == 0) {
-            for (const auto file : fd_table) {
-                vfs::close(file);
-            }
-
-            memory::heap::free(const_cast<char*>(cwd.data()));
-            memory::virt::destroy(space);
-            memory::heap::free(kernel_stack);
-
-            processes.remove_at(id);
-            memory::heap::free(this);
-        }
-    }
+    // Process
 
     bool Process::set_cwd(const stl::StringView path) {
         if (path.empty()) return false;
@@ -244,17 +238,28 @@ namespace cosmos::task {
         return true;
     }
 
-    stl::Optional<uint32_t> Process::add_fd(vfs::File* file) {
-        const auto index = fd_table.add(file);
+    stl::Optional<uint32_t> Process::add_fd(const stl::Rc<vfs::File>& file) {
+        const auto index = fd_table.add(file.ref());
+
+        if (index == -1) {
+            file.deref();
+        }
+
         return index != -1 ? stl::Optional<uint32_t>(index) : stl::Optional<uint32_t>();
     }
 
-    stl::PtrOptional<vfs::File*> Process::get_file(const uint32_t fd) const {
+    stl::Rc<vfs::File> Process::get_file(const uint32_t fd) const {
         return fd_table.get(fd);
     }
 
-    stl::PtrOptional<vfs::File*> Process::remove_fd(const uint32_t fd) {
-        return fd_table.remove_at(fd);
+    stl::Rc<vfs::File> Process::remove_fd(const uint32_t fd) {
+        const auto file = stl::Rc(fd_table.remove_at(fd));
+
+        if (file.valid()) {
+            file.deref();
+        }
+
+        return file;
     }
 
     stl::Optional<ProcessId> Process::fork(const StackFrame& frame) const {
@@ -275,14 +280,27 @@ namespace cosmos::task {
             return {};
         }
 
-        const auto process = get_process(pid.value()).value();
+        const auto process = get_process(pid.value());
 
         // Duplicate file descriptors
         for (auto it = fd_table.begin(); it != fd_table.end(); ++it) {
-            const auto file = vfs::duplicate(*it);
-            process->fd_table.set(it.index, file);
+            const auto file = stl::Rc(*it);
+            process->fd_table.set(it.index, file.ref());
         }
 
         return process->id;
+    }
+
+    void Process::destroy() {
+        for (const auto file : fd_table) {
+            stl::Rc(file).deref();
+        }
+
+        memory::heap::free(const_cast<char*>(cwd.data()));
+        memory::virt::destroy(space);
+        memory::heap::free(kernel_stack);
+
+        processes.remove_at(id);
+        memory::heap::free(this);
     }
 } // namespace cosmos::task

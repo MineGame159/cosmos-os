@@ -65,14 +65,13 @@ namespace cosmos::syscalls {
         const auto abs_path = vfs::resolve(process->cwd, path);
 
         const auto file = vfs::open(abs_path, mode);
-        if (file == nullptr) {
+        if (!file.valid()) {
             free_string(abs_path);
             return -1;
         }
 
         const auto fd = process->add_fd(file);
         if (fd.is_empty()) {
-            vfs::close(file);
             free_string(abs_path);
             return -1;
         }
@@ -83,18 +82,17 @@ namespace cosmos::syscalls {
 
     int64_t close(const uint64_t fd) {
         const auto process = task::get_current_process();
-        OPT_VAR_CHECK(file, process->remove_fd(fd), -1);
+        const auto file = process->remove_fd(fd);
 
-        vfs::close(file);
-        return 0;
+        return file.valid() ? 0 : -1;
     }
 
     int64_t seek(const uint64_t fd, const uint64_t type_, const uint64_t offset_) {
         const auto type = static_cast<vfs::SeekType>(type_);
         const auto offset = static_cast<int64_t>(offset_);
 
-        const auto process = task::get_current_process();
-        OPT_VAR_CHECK(file, process->get_file(fd), -1);
+        const auto file = task::get_current_process()->get_file(fd);
+        if (!file.valid()) return -1;
 
         return file->ops->seek(file, type, offset);
     }
@@ -105,8 +103,8 @@ namespace cosmos::syscalls {
 
         const auto buffer = reinterpret_cast<void*>(buffer_);
 
-        const auto process = task::get_current_process();
-        OPT_VAR_CHECK(file, process->get_file(fd), -1);
+        const auto file = task::get_current_process()->get_file(fd);
+        if (!file.valid()) return -1;
 
         return file->ops->read(file, buffer, length);
     }
@@ -117,15 +115,15 @@ namespace cosmos::syscalls {
 
         const auto buffer = reinterpret_cast<const void*>(buffer_);
 
-        const auto process = task::get_current_process();
-        OPT_VAR_CHECK(file, process->get_file(fd), -1);
+        const auto file = task::get_current_process()->get_file(fd);
+        if (!file.valid()) return -1;
 
         return file->ops->write(file, buffer, length);
     }
 
     int64_t ioctl(const uint64_t fd, const uint64_t op, const uint64_t arg) {
-        const auto process = task::get_current_process();
-        OPT_VAR_CHECK(file, process->get_file(fd), -1);
+        const auto file = task::get_current_process()->get_file(fd);
+        if (!file.valid()) return -1;
 
         return file->ops->ioctl(file, op, arg);
     }
@@ -171,7 +169,7 @@ namespace cosmos::syscalls {
     int64_t eventfd() {
         uint32_t fd;
 
-        if (task::create_event(nullptr, 0, fd).is_empty()) {
+        if (!task::create_event(nullptr, 0, fd).valid()) {
             return -1;
         }
 
@@ -191,10 +189,10 @@ namespace cosmos::syscalls {
         const auto mask = reinterpret_cast<uint64_t*>(mask_);
         const auto process = task::get_current_process();
 
-        vfs::File* event_files[64];
+        stl::Rc<vfs::File> event_files[64];
 
         for (auto i = 0u; i < count; i++) {
-            event_files[i] = process->get_file(fds[i]).value();
+            event_files[i] = process->get_file(fds[i]);
         }
 
         *mask = task::wait_on_events(event_files, count, reset_signalled);
@@ -208,8 +206,8 @@ namespace cosmos::syscalls {
         const auto fds = reinterpret_cast<uint32_t*>(fds_);
 
         // Create pipe files
-        vfs::File* read_file;
-        vfs::File* write_file;
+        stl::Rc<vfs::File> read_file;
+        stl::Rc<vfs::File> write_file;
 
         if (!task::create_pipe(read_file, write_file)) {
             return -1;
@@ -222,8 +220,6 @@ namespace cosmos::syscalls {
         const auto write_fd = process->add_fd(write_file);
 
         if (read_fd.is_empty() || write_fd.is_empty()) {
-            vfs::close(read_file);
-            vfs::close(write_file);
             return -1;
         }
 
@@ -340,7 +336,7 @@ namespace cosmos::syscalls {
             CASE_1(18, join)
 
         default:
-            ERROR("Invalid syscalls %llu from process %llu", number, task::get_current_process());
+            ERROR("Invalid syscalls %llu from process %lu", number, task::get_current_process()->id);
             frame->rax = -1;
             break;
         }

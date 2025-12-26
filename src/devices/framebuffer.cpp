@@ -11,12 +11,12 @@ namespace cosmos::devices::framebuffer {
         return fb.height * fb.pitch * 4;
     }
 
-    uint64_t fb_seek(vfs::File* file, const vfs::SeekType type, const int64_t offset) {
+    uint64_t fb_seek(const stl::Rc<vfs::File>& file, const vfs::SeekType type, const int64_t offset) {
         file->seek(fb_size(), type, offset);
         return file->cursor;
     }
 
-    uint64_t fb_read(vfs::File* file, void* buffer, const uint64_t length) {
+    uint64_t fb_read(const stl::Rc<vfs::File>& file, void* buffer, const uint64_t length) {
         if (file->mode == vfs::Mode::Write) return 0;
         if (file->cursor >= fb_size()) return 0;
 
@@ -31,7 +31,7 @@ namespace cosmos::devices::framebuffer {
         return size;
     }
 
-    uint64_t fb_write(vfs::File* file, const void* buffer, const uint64_t length) {
+    uint64_t fb_write(const stl::Rc<vfs::File>& file, const void* buffer, const uint64_t length) {
         if (file->mode == vfs::Mode::Read) return 0;
         if (file->cursor >= fb_size()) return 0;
 
@@ -46,7 +46,7 @@ namespace cosmos::devices::framebuffer {
         return size;
     }
 
-    uint64_t fb_ioctl([[maybe_unused]] vfs::File* file, const uint64_t op, [[maybe_unused]] uint64_t arg) {
+    uint64_t fb_ioctl([[maybe_unused]] const stl::Rc<vfs::File>& file, const uint64_t op, [[maybe_unused]] uint64_t arg) {
         switch (op) {
         case IOCTL_GET_INFO: {
             const auto fb = limine::get_framebuffer();

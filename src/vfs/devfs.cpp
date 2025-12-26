@@ -82,7 +82,7 @@ namespace cosmos::vfs::devfs {
 
     // Sequence Device
 
-    uint64_t sequence_seek(File* file, [[maybe_unused]] SeekType type, [[maybe_unused]] int64_t offset) {
+    uint64_t sequence_seek(const stl::Rc<File>& file, [[maybe_unused]] SeekType type, [[maybe_unused]] int64_t offset) {
         if (type == SeekType::Current && offset == 0) {
             return file->cursor;
         }
@@ -96,7 +96,7 @@ namespace cosmos::vfs::devfs {
         return 0;
     }
 
-    uint64_t sequence_read(File* file, void* buffer, const uint64_t length) {
+    uint64_t sequence_read(const stl::Rc<File>& file, void* buffer, const uint64_t length) {
         const auto seq = reinterpret_cast<Sequence*>(reinterpret_cast<uint8_t*>(file->node) + sizeof(Node) + sizeof(FileOps*));
 
         // Generate data into buffer
@@ -126,7 +126,7 @@ namespace cosmos::vfs::devfs {
         return read;
     }
 
-    uint64_t sequence_ioctl([[maybe_unused]] File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+    uint64_t sequence_ioctl([[maybe_unused]] const stl::Rc<File>& file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
         return IOCTL_UNKNOWN;
     }
 

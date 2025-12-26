@@ -17,14 +17,14 @@ namespace cosmos::vfs::ramfs {
 
     // FileOps
 
-    uint64_t file_seek(File* file, const SeekType type, const int64_t offset) {
+    uint64_t file_seek(const stl::Rc<File>& file, const SeekType type, const int64_t offset) {
         const auto info = reinterpret_cast<FileInfo*>(file->node + 1);
 
         file->seek(info->data_size, type, offset);
         return file->cursor;
     }
 
-    uint64_t file_read(File* file, void* buffer, const uint64_t length) {
+    uint64_t file_read(const stl::Rc<File>& file, void* buffer, const uint64_t length) {
         const auto info = reinterpret_cast<FileInfo*>(file->node + 1);
 
         if (file->mode == Mode::Write) return 0;
@@ -42,7 +42,7 @@ namespace cosmos::vfs::ramfs {
         return size;
     }
 
-    uint64_t file_write(File* file, const void* buffer, const uint64_t length) {
+    uint64_t file_write(const stl::Rc<File>& file, const void* buffer, const uint64_t length) {
         const auto info = reinterpret_cast<FileInfo*>(file->node + 1);
         if (file->mode == Mode::Read) return 0;
 
@@ -71,7 +71,7 @@ namespace cosmos::vfs::ramfs {
         return length;
     }
 
-    uint64_t file_ioctl([[maybe_unused]] File* file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
+    uint64_t file_ioctl([[maybe_unused]] const stl::Rc<File>& file, [[maybe_unused]] uint64_t op, [[maybe_unused]] uint64_t arg) {
         return IOCTL_UNKNOWN;
     }
 

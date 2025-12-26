@@ -8,7 +8,7 @@
 #include "utils.hpp"
 
 namespace cosmos::elf {
-    bool load_header_load(const memory::virt::Space space, vfs::File* file, const ProgramHeader& header) {
+    bool load_header_load(const memory::virt::Space space, const stl::Rc<vfs::File>& file, const ProgramHeader& header) {
         // Validate header
         if (header.file_size > header.virt_size) {
             ERROR("Corrupted header, file_size > virt_size");
@@ -66,7 +66,7 @@ namespace cosmos::elf {
         return true;
     }
 
-    bool load(const memory::virt::Space space, vfs::File* file, const Binary* binary) {
+    bool load(const memory::virt::Space space, const stl::Rc<vfs::File>& file, const Binary* binary) {
         for (const auto& header : binary->program_headers) {
             if (header.type == ProgramHeaderType::Load) {
                 if (!load_header_load(space, file, header)) return false;

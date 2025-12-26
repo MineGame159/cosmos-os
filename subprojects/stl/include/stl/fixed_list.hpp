@@ -152,5 +152,12 @@ namespace stl {
 
             return remove_at(index);
         }
+
+        T remove(Iterator& it) {
+            const auto item = remove_at(it.index);
+            --it.index;
+            it.max_count = max_count;
+            return item;
+        }
     };
 } // namespace stl

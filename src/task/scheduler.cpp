@@ -67,7 +67,7 @@ namespace cosmos::task {
         )");
     }
 
-    static Process* move_next() {
+    static stl::Rc<Process> move_next() {
         ++it;
 
         if (it == stl::LinkedList<ProcessId>::end()) {
@@ -90,69 +90,72 @@ namespace cosmos::task {
     }
 
     bool enqueue(const ProcessId pid) {
-        OPT_VAR_CHECK(process, get_process(pid), false);
+        const auto process = get_process(pid);
+        if (!process.valid()) return false;
 
-        *process_queue.push_back_alloc() = process->ref();
+        *process_queue.push_back_alloc() = process.ref()->id;
         return true;
     }
 
     bool dequeue(const ProcessId pid) {
-        OPT_VAR_CHECK(process, get_process(pid), false);
+        const auto process = get_process(pid);
+        if (!process.valid()) return false;
 
         if (process_queue.remove(pid)) {
-            process->unref();
+            process.deref();
             return true;
         }
 
         return false;
     }
 
-    Process* get_current_process() {
-        return get_process(**it).value();
+    stl::Rc<Process> get_current_process() {
+        return get_process(**it);
     }
 
     stl::Optional<uint64_t> join(const ProcessId pid) {
-        OPT_VAR_CHECK(process, get_process(pid), false);
+        const auto process = get_process(pid);
+        if (!process.valid()) return {};
 
         const auto current = get_current_process();
         if (process == current) return {};
 
-        process->ref();
-
         current->state = State::SuspendedEvents;
-        current->joining_with = process;
+        current->joining_with = *process;
 
         yield();
         current->joining_with = nullptr;
 
         const auto status = process->status;
-        process->unref();
 
         return status;
     }
 
     void yield() {
-        auto current = get_current_process();
+        Process* new_process_ptr = nullptr;
+        Process* old_process_ptr = nullptr;
 
-        if (current->state == State::Running) {
-            current->state = State::Waiting;
-        }
+        {
+            auto current = get_current_process();
 
-        const auto old_process = current;
+            if (current->state == State::Running) {
+                current->state = State::Waiting;
+            }
 
-        asm volatile("cli" ::: "memory");
+            const auto old_process = current;
 
-        current = move_next();
+            asm volatile("cli" ::: "memory");
 
-        for (;;) {
-            if (current->state == State::Exited) {
-                INFO("Process %llu exited with status %llu", current->id, current->status);
+            current = move_next();
 
-                if (process_queue.single_item()) {
-                    utils::panic(nullptr, "[scheduler] All processes exited, stopping");
-                }
+            for (;;) {
+                if (current->state == State::Exited) {
+                    DEBUG("Process %llu exited with status %llu", current->id, current->status);
 
-                if (current != old_process) {
+                    if (process_queue.single_item()) {
+                        utils::panic(nullptr, "[scheduler] All processes exited, stopping");
+                    }
+
                     const auto next = it.node->next;
                     dequeue(current->id);
                     it.node = next;
@@ -165,39 +168,46 @@ namespace cosmos::task {
 
                     continue;
                 }
-            }
 
-            if (current->state == State::Waiting) {
-                break;
-            }
-
-            if (current->state == State::SuspendedEvents) {
-                if (current->joining_with != nullptr) {
-                    if (current->joining_with->state == State::Exited) break;
-                } else {
-                    if (current->event_signalled) break;
+                if (current->state == State::Waiting) {
+                    break;
                 }
+
+                if (current->state == State::SuspendedEvents) {
+                    if (current->joining_with != nullptr) {
+                        if (current->joining_with->state == State::Exited) break;
+                    } else {
+                        if (current->event_signalled) break;
+                    }
+                }
+
+                if (current == old_process) {
+                    asm volatile("sti; hlt; cli" ::: "memory");
+                }
+
+                current = move_next();
             }
 
-            if (current == old_process) {
-                asm volatile("sti; hlt; cli" ::: "memory");
+            if (old_process == current) {
+                asm volatile("sti" ::: "memory");
+                return;
             }
 
-            current = move_next();
+            new_process_ptr = *current;
+            old_process_ptr = *old_process;
         }
 
-        if (old_process != current) {
-            switch_to_process(&old_process->kernel_stack_rsp, current);
-        }
-
+        switch_to_process(&old_process_ptr->kernel_stack_rsp, new_process_ptr);
         asm volatile("sti" ::: "memory");
     }
 
     void exit(const uint64_t status) {
-        const auto current = get_current_process();
+        {
+            const auto current = get_current_process();
 
-        current->state = State::Exited;
-        current->status = status;
+            current->state = State::Exited;
+            current->status = status;
+        }
 
         yield();
     }
@@ -213,20 +223,24 @@ namespace cosmos::task {
     void resume(const ProcessId pid) {
         const auto process = get_process(pid);
 
-        if (process.has_value() && process.value()->state == State::Suspended) {
-            process.value()->state = State::Waiting;
+        if (process.valid() && process->state == State::Suspended) {
+            process->state = State::Waiting;
         }
     }
 
     void run() {
         asm volatile("cli" ::: "memory");
+        Process* process_ptr;
 
-        utils::msr_write(utils::MSR_GS_BASE, reinterpret_cast<uint64_t>(&cpu_status));
-        utils::msr_write(utils::MSR_KERNEL_GS_BASE, 0);
+        {
+            utils::msr_write(utils::MSR_GS_BASE, reinterpret_cast<uint64_t>(&cpu_status));
+            utils::msr_write(utils::MSR_KERNEL_GS_BASE, 0);
 
-        it = process_queue.begin();
+            it = process_queue.begin();
+            process_ptr = *get_current_process();
+        }
+
         uint64_t old;
-
-        switch_to_process(&old, get_current_process());
+        switch_to_process(&old, process_ptr);
     }
 } // namespace cosmos::task

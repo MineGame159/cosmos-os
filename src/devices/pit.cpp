@@ -39,11 +39,12 @@ namespace cosmos::devices::pit {
 
     // VFS
 
-    static uint64_t seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
+    static uint64_t seek([[maybe_unused]] const stl::Rc<vfs::File>& file, [[maybe_unused]] vfs::SeekType type,
+                         [[maybe_unused]] int64_t offset) {
         return 0;
     }
 
-    static uint64_t read([[maybe_unused]] vfs::File* file, void* buffer, const uint64_t length) {
+    static uint64_t read([[maybe_unused]] const stl::Rc<vfs::File>& file, void* buffer, const uint64_t length) {
         if (length != sizeof(uint64_t)) return 0;
 
         *static_cast<uint64_t*>(buffer) = ticks;
@@ -52,7 +53,10 @@ namespace cosmos::devices::pit {
 
     static void event_close(const uint64_t index) {
         asm volatile("cli" ::: "memory");
-        repeats.remove_at(index);
+
+        const auto file = stl::Rc(reinterpret_cast<vfs::File*>(repeats.remove_at(index).data));
+        file.deref();
+
         asm volatile("sti" ::: "memory");
     }
 
@@ -63,14 +67,14 @@ namespace cosmos::devices::pit {
         event_file->ops->write(event_file, &number, sizeof(uint64_t));
     }
 
-    static uint64_t ioctl([[maybe_unused]] vfs::File* file, const uint64_t op, const uint64_t arg) {
+    static uint64_t ioctl([[maybe_unused]] const stl::Rc<vfs::File>& file, const uint64_t op, const uint64_t arg) {
         switch (op) {
         case IOCTL_CREATE_EVENT: {
             const auto index = repeats.index_of({});
             if (index == -1) return 0;
 
             uint32_t fd;
-            const auto event_file = task::create_event(event_close, index, fd).value();
+            const auto event_file = task::create_event(event_close, index, fd).ref();
 
             if (event_file == nullptr) {
                 return fd;

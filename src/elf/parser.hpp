@@ -4,5 +4,5 @@
 #include "vfs/types.hpp"
 
 namespace cosmos::elf {
-    Binary* parse(vfs::File* file);
+    Binary* parse(const stl::Rc<vfs::File>& file);
 } // namespace cosmos::elf

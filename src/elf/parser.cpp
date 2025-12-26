@@ -47,7 +47,7 @@ namespace cosmos::elf {
 
     constexpr uint64_t IDENTIFIER_HEADER_SIZE = sizeof(Identifier) + sizeof(Header);
 
-    Binary* parse(vfs::File* file) {
+    Binary* parse(const stl::Rc<vfs::File>& file) {
         // Read identifier and header
         uint8_t identifier_header[IDENTIFIER_HEADER_SIZE];
 

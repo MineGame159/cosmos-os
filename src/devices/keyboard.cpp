@@ -10,11 +10,12 @@ namespace cosmos::devices::keyboard {
     static stl::RingBuffer<Event, 32> events = {};
     static stl::FixedList<vfs::File*, 8, nullptr> event_files = {};
 
-    static uint64_t kb_seek([[maybe_unused]] vfs::File* file, [[maybe_unused]] vfs::SeekType type, [[maybe_unused]] int64_t offset) {
+    static uint64_t kb_seek([[maybe_unused]] const stl::Rc<vfs::File>& file, [[maybe_unused]] vfs::SeekType type,
+                            [[maybe_unused]] int64_t offset) {
         return 0;
     }
 
-    static uint64_t kb_read(vfs::File* file, void* buffer, const uint64_t length) {
+    static uint64_t kb_read(const stl::Rc<vfs::File>& file, void* buffer, const uint64_t length) {
         if (length != sizeof(Event)) return 0;
 
         asm volatile("cli" ::: "memory");
@@ -33,11 +34,14 @@ namespace cosmos::devices::keyboard {
 
     static void event_close(const uint64_t index) {
         asm volatile("cli" ::: "memory");
-        event_files.remove_at(index);
+
+        const auto file = stl::Rc(event_files.remove_at(index));
+        file.deref();
+
         asm volatile("sti" ::: "memory");
     }
 
-    static uint64_t kb_ioctl([[maybe_unused]] vfs::File* file, const uint64_t op, [[maybe_unused]] uint64_t arg) {
+    static uint64_t kb_ioctl([[maybe_unused]] const stl::Rc<vfs::File>& file, const uint64_t op, [[maybe_unused]] uint64_t arg) {
         switch (op) {
         case IOCTL_CREATE_EVENT: {
             asm volatile("cli" ::: "memory");
@@ -51,7 +55,7 @@ namespace cosmos::devices::keyboard {
             }
 
             uint32_t fd;
-            *event_file = task::create_event(event_close, event_file_index, fd).value();
+            *event_file = task::create_event(event_close, event_file_index, fd).ref();
 
             if (*event_file == nullptr) {
                 event_files.remove_at(event_file_index);
