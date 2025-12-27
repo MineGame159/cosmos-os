@@ -153,10 +153,14 @@ namespace sys {
         return syscall<Sys::Close>(fd) >= 0;
     }
 
-    inline bool duplicate(const uint32_t fd, uint32_t& duplicated_fd, const int64_t new_fd = -1) {
-        const auto result = syscall<Sys::Duplicate>(fd, new_fd);
+    inline bool duplicate(const uint32_t fd, uint32_t& duplicated_fd) {
+        const auto result = syscall<Sys::Duplicate>(fd, -1);
         duplicated_fd = static_cast<uint32_t>(result);
         return result >= 0;
+    }
+
+    inline bool duplicate(const uint32_t fd, const uint32_t new_fd) {
+        return syscall<Sys::Duplicate>(fd, new_fd) >= 0;
     }
 
     inline int64_t seek(const uint32_t fd, const SeekType type, const int64_t offset) {

@@ -66,27 +66,6 @@ namespace terminal {
         }
     }
 
-    static void print(const char ch) {
-        const auto glyph = get_font_glyph(ch);
-        if (!glyph.valid()) return;
-
-        const auto base_x = row * FONT_WIDTH;
-        const auto base_y = column * FONT_HEIGHT;
-
-        const auto color = fg_color.pack();
-
-        for (auto y = 0u; y < FONT_HEIGHT; y++) {
-            uint32_t line_pixels[FONT_WIDTH];
-
-            for (auto x = 0u; x < FONT_WIDTH; x++) {
-                line_pixels[x] = glyph.is_set(x, y) ? color : 0xFF000000;
-            }
-
-            sys::seek(fb, sys::SeekType::Start, ((base_y + y) * pitch + base_x) * 4);
-            sys::write(fb, line_pixels, FONT_WIDTH * 4);
-        }
-    }
-
     static void fill_cell(const uint32_t pixel) {
         const auto base_x = row * FONT_WIDTH;
         const auto base_y = column * FONT_HEIGHT;
@@ -137,16 +116,43 @@ namespace terminal {
         return fg_color;
     }
 
+    void print(const char ch) {
+        if (ch == '\n') {
+            new_line();
+            return;
+        }
+
+        if (ch == '\0') {
+            return;
+        }
+
+        const auto glyph = get_font_glyph(ch);
+
+        if (glyph.valid()) {
+            const auto base_x = row * FONT_WIDTH;
+            const auto base_y = column * FONT_HEIGHT;
+
+            const auto color = fg_color.pack();
+
+            for (auto y = 0u; y < FONT_HEIGHT; y++) {
+                uint32_t line_pixels[FONT_WIDTH];
+
+                for (auto x = 0u; x < FONT_WIDTH; x++) {
+                    line_pixels[x] = glyph.is_set(x, y) ? color : 0xFF000000;
+                }
+
+                sys::seek(fb, sys::SeekType::Start, ((base_y + y) * pitch + base_x) * 4);
+                sys::write(fb, line_pixels, FONT_WIDTH * 4);
+            }
+        }
+
+        row++;
+        if (row >= columns) new_line();
+    }
+
     void print(const stl::StringView str) {
         for (const auto ch : str) {
-            if (ch == '\n') {
-                new_line();
-            } else if (ch != '\0') {
-                print(ch);
-
-                row++;
-                if (row >= columns) new_line();
-            }
+            print(ch);
         }
     }
 

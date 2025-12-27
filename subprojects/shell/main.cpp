@@ -62,9 +62,109 @@ static void print_prompt() {
     terminal::print(WHITE, " > ");
 }
 
-extern "C" void _start() {
+enum class EscapeState {
+    None,
+    Command,
+    ColorR,
+    ColorG,
+    ColorB,
+};
+
+static void run_command(const CommandFn fn, const stl::StringView args) {
+    // Create out pipe
+    uint32_t out_read_fd, out_write_fd;
+    sys::pipe(out_read_fd, out_write_fd);
+
+    // Fork process
+    uint32_t child_pid;
+    sys::fork(child_pid);
+
+    if (child_pid == 0) {
+        // Setup out pipe
+        sys::duplicate(out_write_fd, 1);
+        sys::close(out_read_fd);
+        sys::close(out_write_fd);
+
+        // Run command
+        fn(args);
+
+        // Exit child process
+        sys::exit(0);
+    } else {
+        // Close unneeded pipe ends
+        sys::close(out_write_fd);
+    }
+
+    // Read out pipe and print to terminal
+    char buffer[512];
+    uint64_t read;
+
+    auto state = EscapeState::None;
+    uint8_t color_r = 0;
+    uint8_t color_g = 0;
+
+    while (sys::read(out_read_fd, buffer, 512, read) && read > 0) {
+        for (auto i = 0u; i < read; i++) {
+            const auto ch = buffer[i];
+
+            switch (state) {
+            case EscapeState::None:
+                if (ch == 27) {
+                    state = EscapeState::Command;
+                } else {
+                    terminal::print(ch);
+                }
+                break;
+            case EscapeState::Command:
+                switch (ch) {
+                case 'f':
+                    state = EscapeState::ColorR;
+                    break;
+                case 'r':
+                    state = EscapeState::None;
+                    terminal::set_fg_color(WHITE);
+                    break;
+                default:
+                    state = EscapeState::None;
+                    break;
+                }
+                break;
+            case EscapeState::ColorR:
+                state = EscapeState::ColorG;
+                color_r = ch;
+                break;
+            case EscapeState::ColorG:
+                state = EscapeState::ColorB;
+                color_g = ch;
+                break;
+            case EscapeState::ColorB:
+                state = EscapeState::None;
+                terminal::set_fg_color({ color_r, color_g, static_cast<uint8_t>(ch) });
+                break;
+            }
+        }
+    }
+
+    // Close rest of pipe ends
+    sys::close(out_read_fd);
+
+    // Join child process
+    sys::join(child_pid);
+}
+
+extern "C" [[noreturn]]
+void _start() {
+    // Fill first 3 FDs (stdio) with /dev/null
+    uint32_t null_fd;
+
+    sys::open("/dev/null", sys::Mode::Read, null_fd);
+    sys::open("/dev/null", sys::Mode::Write, null_fd);
+    sys::open("/dev/null", sys::Mode::Write, null_fd);
+
+    // Initialise terminal
     terminal::init();
 
+    // Run shell
     for (;;) {
         print_prompt();
 
@@ -87,7 +187,7 @@ extern "C" void _start() {
 
         // Run command
         const auto args = space_index != -1 ? prompt.substr(space_index + 1) : "";
-        cmd_fn(args);
+        run_command(cmd_fn, args);
     }
 
     sys::exit(0);

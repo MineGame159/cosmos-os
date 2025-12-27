@@ -11,6 +11,8 @@ namespace terminal {
     void set_fg_color(Color color);
     Color get_fg_color();
 
+    void print(char ch);
+
     void print(stl::StringView str);
     void printf_args(const char* fmt, va_list args);
 
