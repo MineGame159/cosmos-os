@@ -8,20 +8,21 @@ enum class Sys : int64_t {
     Stat = 2,
     Open = 3,
     Close = 4,
-    Seek = 5,
-    Read = 6,
-    Write = 7,
-    Ioctl = 8,
-    CreateDir = 9,
-    Remove = 10,
-    Mount = 11,
-    Eventfd = 12,
-    Poll = 13,
-    Pipe = 14,
-    Fork = 15,
-    GetCwd = 16,
-    SetCwd = 17,
-    Join = 18,
+    Duplicate = 5,
+    Seek = 6,
+    Read = 7,
+    Write = 8,
+    Ioctl = 9,
+    CreateDir = 10,
+    Remove = 11,
+    Mount = 12,
+    Eventfd = 13,
+    Poll = 14,
+    Pipe = 15,
+    Fork = 16,
+    GetCwd = 17,
+    SetCwd = 18,
+    Join = 19,
 };
 
 template <const Sys S>
@@ -150,6 +151,12 @@ namespace sys {
 
     inline bool close(const uint32_t fd) {
         return syscall<Sys::Close>(fd) >= 0;
+    }
+
+    inline bool duplicate(const uint32_t fd, uint32_t& duplicated_fd, const int64_t new_fd = -1) {
+        const auto result = syscall<Sys::Duplicate>(fd, new_fd);
+        duplicated_fd = static_cast<uint32_t>(result);
+        return result >= 0;
     }
 
     inline int64_t seek(const uint32_t fd, const SeekType type, const int64_t offset) {

@@ -69,6 +69,7 @@ namespace cosmos::task {
         bool set_cwd(stl::StringView path);
 
         stl::Optional<uint32_t> add_fd(const stl::Rc<vfs::File>& file);
+        bool set_fd(const stl::Rc<vfs::File>& file, uint32_t fd);
         stl::Rc<vfs::File> get_file(uint32_t fd) const;
         stl::Rc<vfs::File> remove_fd(uint32_t fd);
 

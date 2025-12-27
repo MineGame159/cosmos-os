@@ -248,6 +248,15 @@ namespace cosmos::task {
         return index != -1 ? stl::Optional<uint32_t>(index) : stl::Optional<uint32_t>();
     }
 
+    bool Process::set_fd(const stl::Rc<vfs::File>& file, const uint32_t fd) {
+        if (fd >= fd_table.capacity()) return false;
+
+        remove_fd(fd);
+        fd_table.set(fd, file.ref());
+
+        return true;
+    }
+
     stl::Rc<vfs::File> Process::get_file(const uint32_t fd) const {
         return fd_table.get(fd);
     }

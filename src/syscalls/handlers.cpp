@@ -87,6 +87,23 @@ namespace cosmos::syscalls {
         return file.valid() ? 0 : -1;
     }
 
+    int64_t duplicate(const uint64_t fd, const uint64_t new_fd) {
+        const auto process = task::get_current_process();
+
+        const auto file = process->get_file(fd);
+        if (!file.valid()) return -1;
+
+        // Duplicate into first empty slot
+        if (static_cast<int64_t>(new_fd) == -1) {
+            const auto duped = process->add_fd(file);
+            return duped.has_value() ? duped.value() : -1;
+        }
+
+        // Duplicate into specified slot
+        const auto result = process->set_fd(file, new_fd);
+        return result ? new_fd : -1;
+    }
+
     int64_t seek(const uint64_t fd, const uint64_t type_, const uint64_t offset_) {
         const auto type = static_cast<vfs::SeekType>(type_);
         const auto offset = static_cast<int64_t>(offset_);
@@ -316,24 +333,25 @@ namespace cosmos::syscalls {
             CASE_2(2, stat)
             CASE_2(3, open)
             CASE_1(4, close)
-            CASE_3(5, seek)
-            CASE_3(6, read)
-            CASE_3(7, write)
-            CASE_3(8, ioctl)
-            CASE_1(9, create_dir)
-            CASE_1(10, remove)
-            CASE_3(11, mount)
-            CASE_0(12, eventfd)
-            CASE_4(13, poll)
-            CASE_1(14, pipe)
+            CASE_2(5, duplicate)
+            CASE_3(6, seek)
+            CASE_3(7, read)
+            CASE_3(8, write)
+            CASE_3(9, ioctl)
+            CASE_1(10, create_dir)
+            CASE_1(11, remove)
+            CASE_3(12, mount)
+            CASE_0(13, eventfd)
+            CASE_4(14, poll)
+            CASE_1(15, pipe)
 
-        case 15:
+        case 16:
             frame->rax = fork(*frame);
             break;
 
-            CASE_2(16, get_cwd)
-            CASE_1(17, set_cwd)
-            CASE_1(18, join)
+            CASE_2(17, get_cwd)
+            CASE_1(18, set_cwd)
+            CASE_1(19, join)
 
         default:
             ERROR("Invalid syscalls %llu from process %lu", number, task::get_current_process()->id);

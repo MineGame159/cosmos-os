@@ -54,6 +54,10 @@ namespace stl {
             }
         }
 
+        static size_t capacity() {
+            return N;
+        }
+
         Iterator begin() const {
             size_t i = 0;
 
