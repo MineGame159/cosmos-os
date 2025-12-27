@@ -3,6 +3,7 @@
 #include "devices/framebuffer.hpp"
 #include "devices/info.hpp"
 #include "devices/keyboard.hpp"
+#include "devices/null.hpp"
 #include "devices/pci.hpp"
 #include "devices/pit.hpp"
 #include "devices/ps2kbd.hpp"
@@ -41,6 +42,7 @@ void init() {
     const auto devfs = vfs::mount("/dev", "devfs", "");
 
     log::init_devfs(devfs);
+    devices::null::init(devfs);
     devices::pit::init(devfs);
     devices::framebuffer::init(devfs);
     devices::keyboard::init(devfs);

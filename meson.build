@@ -33,6 +33,7 @@ sources = [
     'src/task/scheduler.cpp',
     'src/acpi/uacpi.cpp',
     'src/acpi/acpi.cpp',
+    'src/devices/null.cpp',
     'src/devices/pit.cpp',
     'src/devices/framebuffer.cpp',
     'src/devices/ps2kbd.cpp',
