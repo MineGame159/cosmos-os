@@ -8,6 +8,8 @@
 #include <cstdarg>
 
 namespace cosmos::vfs::devfs {
+    extern FileOps sequence_file_ops;
+
     // FsOps
 
     Node* fs_create([[maybe_unused]] Node* parent, [[maybe_unused]] NodeType type, [[maybe_unused]] stl::StringView name) {
@@ -27,6 +29,11 @@ namespace cosmos::vfs::devfs {
 
         if (is_read(mode) && ops->read == nullptr) return nullptr;
         if (is_write(mode) && ops->write == nullptr) return nullptr;
+
+        if (ops == &sequence_file_ops) {
+            const auto seq = reinterpret_cast<const Sequence*>(reinterpret_cast<const uint8_t*>(node) + sizeof(Node) + sizeof(FileOps*));
+            seq->ops->reset(const_cast<Sequence*>(seq));
+        }
 
         return ops;
     }
@@ -130,7 +137,7 @@ namespace cosmos::vfs::devfs {
         return IOCTL_UNKNOWN;
     }
 
-    static constexpr FileOps sequence_file_ops = {
+    FileOps sequence_file_ops = {
         .seek = sequence_seek,
         .read = sequence_read,
         .write = nullptr,
@@ -163,7 +170,5 @@ namespace cosmos::vfs::devfs {
         seq->index = 0;
         seq->show_overflow = false;
         seq->buffer = {};
-
-        seq->ops->reset(seq);
     }
 } // namespace cosmos::vfs::devfs

@@ -27,9 +27,11 @@ namespace stl {
             }
 
             Iterator& operator++() {
-                do {
-                    index++;
-                } while (index < max_count && items[index] == EMPTY);
+                if (index < max_count) {
+                    do {
+                        index++;
+                    } while (index < max_count && items[index] == EMPTY);
+                }
 
                 return *this;
             }

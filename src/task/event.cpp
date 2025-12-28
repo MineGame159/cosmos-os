@@ -58,7 +58,7 @@ namespace cosmos::task {
 
     // Header
 
-    stl::Rc<vfs::File> create_event(void (*close_fn)(uint64_t data), const uint64_t close_data, uint32_t& fd) {
+    stl::Rc<vfs::File> create_event(void (*close_fn)(uint64_t data), const uint64_t close_data, const vfs::FileFlags flags, uint32_t& fd) {
         const auto file = stl::Rc<vfs::File>::alloc(sizeof(Event));
 
         if (!file.valid()) {
@@ -70,6 +70,7 @@ namespace cosmos::task {
         file->on_close = event_close;
         file->node = nullptr;
         file->mode = vfs::Mode::ReadWrite;
+        file->flags = flags;
         file->cursor = 0;
 
         fd = get_current_process()->add_fd(file).value_or(0xFFFFFFFF);

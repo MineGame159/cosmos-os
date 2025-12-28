@@ -10,10 +10,30 @@
 #include "vfs/vfs.hpp"
 
 namespace cosmos::task {
+    constexpr uint64_t USER_STACK_BOTTOM = (memory::virt::LOWER_HALF_END - USER_STACK_SIZE);
+    constexpr uint64_t USER_STACK_BOTTOM_PAGE = USER_STACK_BOTTOM / 4096ul;
+
     static stl::FixedList<Process*, 256, nullptr> processes = {};
 
     __attribute__((naked)) void user_entry_stub() {
         asm volatile("swapgs; iretq");
+    }
+
+    static stl::Optional<uint64_t> alloc_user_stack(const memory::virt::Space space) {
+        // Allocate physical pages
+        const auto phys = memory::phys::alloc_pages(USER_STACK_SIZE / 4096ul) / 4096ul;
+        if (phys == 0) return {};
+
+        // Map virtual pages
+        constexpr auto flags = memory::virt::Flags::Write | memory::virt::Flags::User;
+        const auto status = memory::virt::map_pages(space, USER_STACK_BOTTOM_PAGE, phys, USER_STACK_SIZE / 4096ul, flags);
+
+        if (!status) {
+            memory::phys::free_pages(phys, USER_STACK_SIZE / 4096ul);
+            return {};
+        }
+
+        return phys;
     }
 
     void setup_dummy_frame(StackFrame& frame, const ProcessFn fn) {
@@ -95,12 +115,10 @@ namespace cosmos::task {
 
         // Allocate user stack
         if (land == Land::User) {
-            constexpr auto virt = (memory::virt::LOWER_HALF_END - USER_STACK_SIZE) / 4096ul;
-
             if (alloc_user_stack) {
-                process->user_stack_phys = memory::phys::alloc_pages(USER_STACK_SIZE / 4096ul);
+                const auto phys = task::alloc_user_stack(process->space);
 
-                if (process->user_stack_phys == 0) {
+                if (phys.is_empty()) {
                     ERROR("Failed to allocate memory for user stack");
 
                     memory::heap::free(process->kernel_stack);
@@ -110,20 +128,9 @@ namespace cosmos::task {
                     return {};
                 }
 
-                const auto phys = process->user_stack_phys / 4096ul;
-                constexpr auto flags = memory::virt::Flags::Write | memory::virt::Flags::User;
-                const auto status = memory::virt::map_pages(space, virt, phys, USER_STACK_SIZE / 4096ul, flags);
-
-                if (!status) {
-                    memory::phys::free_pages(phys, USER_STACK_SIZE / 4096ul);
-                    memory::heap::free(process->kernel_stack);
-                    processes.remove(process);
-                    memory::heap::free(process);
-
-                    return {};
-                }
+                process->user_stack_phys = phys.value();
             } else {
-                process->user_stack_phys = memory::virt::get_phys(virt);
+                process->user_stack_phys = memory::virt::get_phys(USER_STACK_BOTTOM);
             }
         } else {
             process->user_stack_phys = 0;
@@ -177,7 +184,7 @@ namespace cosmos::task {
 
     stl::Optional<ProcessId> create_process(const stl::StringView path, const stl::StringView cwd) {
         // Open file
-        const auto file = vfs::open(path, vfs::Mode::Read);
+        const auto file = vfs::open(path, vfs::Mode::Read, vfs::FileFlags::CloseOnExecute);
 
         if (!file.valid()) {
             ERROR("Failed to open file");
@@ -298,6 +305,66 @@ namespace cosmos::task {
         }
 
         return process->id;
+    }
+
+    stl::Optional<uint64_t> Process::execute(const stl::StringView path) {
+        if (land != Land::User) {
+            ERROR("Can only execute binaries in user-land processes");
+            return {};
+        }
+
+        // Open file
+        const auto binary_file = vfs::open(path, vfs::Mode::Read, vfs::FileFlags::CloseOnExecute);
+
+        if (!binary_file.valid()) {
+            ERROR("Failed to open file");
+            return {};
+        }
+
+        // Parse ELF binary
+        const auto binary = elf::parse(binary_file);
+
+        if (binary == nullptr) {
+            return {};
+        }
+
+        // Clear address space
+        memory::virt::clear(space);
+        memory::virt::switch_to(space);
+
+        // Allocate user stack
+        const auto stack_phys = alloc_user_stack(space);
+
+        if (stack_phys.is_empty()) {
+            ERROR("Failed to allocate memory for user stack");
+            memory::heap::free(binary);
+            return {};
+        }
+
+        user_stack_phys = stack_phys.value();
+
+        // Load ELF binary
+        if (!elf::load(space, binary_file, binary)) {
+            memory::heap::free(binary);
+            return {};
+        }
+
+        // Set entry point address
+        const auto rip = binary->virt_entry;
+
+        // Cleanup
+        memory::heap::free(binary);
+
+        // Close files with CloseOnExecute
+        for (auto it = fd_table.begin(); it != fd_table.end(); ++it) {
+            const auto file = *it;
+
+            if (file->flags / vfs::FileFlags::CloseOnExecute) {
+                fd_table.remove(it);
+            }
+        }
+
+        return rip;
     }
 
     void Process::destroy() {

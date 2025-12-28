@@ -12,7 +12,7 @@ namespace cosmos::vfs {
 
     bool stat(stl::StringView path, Stat& stat);
 
-    stl::Rc<File> open(stl::StringView path, Mode mode);
+    stl::Rc<File> open(stl::StringView path, Mode mode, FileFlags flags);
 
     bool create_dir(stl::StringView path);
 

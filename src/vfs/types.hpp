@@ -1,5 +1,6 @@
 #pragma once
 
+#include "stl/bit_field.hpp"
 #include "stl/linked_list.hpp"
 #include "stl/rc.hpp"
 #include "stl/string_view.hpp"
@@ -81,6 +82,11 @@ namespace cosmos::vfs {
         return mode == Mode::Write || mode == Mode::ReadWrite;
     }
 
+    enum class FileFlags : uint8_t {
+        CloseOnExecute = 1 << 0,
+    };
+    ENUM_BIT_FIELD(FileFlags)
+
     struct File {
         size_t ref_count;
 
@@ -90,6 +96,8 @@ namespace cosmos::vfs {
         Node* node;
 
         Mode mode;
+        FileFlags flags;
+
         uint64_t cursor;
 
         void seek(const uint64_t data_size, const SeekType type, const int64_t offset) {

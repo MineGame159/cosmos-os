@@ -35,8 +35,7 @@ namespace cosmos::devices::keyboard {
     static void event_close(const uint64_t index) {
         asm volatile("cli" ::: "memory");
 
-        const auto file = stl::Rc(event_files.remove_at(index));
-        file.deref();
+        event_files.remove_at(index);
 
         asm volatile("sti" ::: "memory");
     }
@@ -55,7 +54,7 @@ namespace cosmos::devices::keyboard {
             }
 
             uint32_t fd;
-            *event_file = task::create_event(event_close, event_file_index, fd).ref();
+            *event_file = *task::create_event(event_close, event_file_index, vfs::FileFlags::CloseOnExecute, fd);
 
             if (*event_file == nullptr) {
                 event_files.remove_at(event_file_index);

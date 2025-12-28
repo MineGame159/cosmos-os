@@ -57,14 +57,15 @@ namespace cosmos::syscalls {
         return result ? 0 : -1;
     }
 
-    int64_t open(const uint64_t path_, const uint64_t mode_) {
+    int64_t open(const uint64_t path_, const uint64_t mode_, const uint64_t flags_) {
         const auto path = get_string_view(path_);
         const auto mode = static_cast<vfs::Mode>(mode_);
+        const auto flags = static_cast<vfs::FileFlags>(flags_);
         const auto process = task::get_current_process();
 
         const auto abs_path = vfs::resolve(process->cwd, path);
 
-        const auto file = vfs::open(abs_path, mode);
+        const auto file = vfs::open(abs_path, mode, flags);
         if (!file.valid()) {
             free_string(abs_path);
             return -1;
@@ -183,10 +184,12 @@ namespace cosmos::syscalls {
         return vfs::mount(abs_target_path, filesystem_name, abs_device_path) != nullptr ? 0 : -1;
     }
 
-    int64_t eventfd() {
+    int64_t eventfd(const uint64_t flags_) {
+        const auto flags = static_cast<vfs::FileFlags>(flags_);
+
         uint32_t fd;
 
-        if (!task::create_event(nullptr, 0, fd).valid()) {
+        if (!task::create_event(nullptr, 0, flags, fd).valid()) {
             return -1;
         }
 
@@ -216,17 +219,18 @@ namespace cosmos::syscalls {
         return 0;
     }
 
-    int64_t pipe(const uint64_t fds_) {
+    int64_t pipe(const uint64_t flags_, const uint64_t fds_) {
         if (memory::virt::is_invalid_user(fds_)) return -1;
         if (memory::virt::is_invalid_user(fds_ + 2 * sizeof(uint32_t))) return -1;
 
+        const auto flags = static_cast<vfs::FileFlags>(flags_);
         const auto fds = reinterpret_cast<uint32_t*>(fds_);
 
         // Create pipe files
         stl::Rc<vfs::File> read_file;
         stl::Rc<vfs::File> write_file;
 
-        if (!task::create_pipe(read_file, write_file)) {
+        if (!task::create_pipe(flags, read_file, write_file)) {
             return -1;
         }
 
@@ -258,6 +262,21 @@ namespace cosmos::syscalls {
 
         task::enqueue(child_pid);
         return child_pid;
+    }
+
+    int64_t execute(task::StackFrame& frame) {
+        const auto path = get_string_view(frame.rdi);
+        const auto process = task::get_current_process();
+
+        const auto abs_path = vfs::resolve(process->cwd, path);
+
+        const auto entry_point = process->execute(abs_path);
+        if (entry_point.is_empty()) return -1;
+
+        frame.rip = entry_point.value();
+        frame.user_rsp = memory::virt::LOWER_HALF_END;
+
+        return 0;
     }
 
     int64_t get_cwd(const uint64_t buffer_, const uint64_t length) {
@@ -326,12 +345,16 @@ namespace cosmos::syscalls {
     case number:                                                                                                                           \
         frame->rax = handler(frame->rdi, frame->rsi, frame->rdx, frame->r10, frame->r8, frame->r9);                                        \
         break;
+#define CASE_F(number, handler)                                                                                                            \
+    case number:                                                                                                                           \
+        frame->rax = handler(*frame);                                                                                                      \
+        break;
 
         switch (number) {
             CASE_1(0, exit)
             CASE_0(1, yield)
             CASE_2(2, stat)
-            CASE_2(3, open)
+            CASE_3(3, open)
             CASE_1(4, close)
             CASE_2(5, duplicate)
             CASE_3(6, seek)
@@ -341,17 +364,14 @@ namespace cosmos::syscalls {
             CASE_1(10, create_dir)
             CASE_1(11, remove)
             CASE_3(12, mount)
-            CASE_0(13, eventfd)
+            CASE_1(13, eventfd)
             CASE_4(14, poll)
-            CASE_1(15, pipe)
-
-        case 16:
-            frame->rax = fork(*frame);
-            break;
-
-            CASE_2(17, get_cwd)
-            CASE_1(18, set_cwd)
-            CASE_1(19, join)
+            CASE_2(15, pipe)
+            CASE_F(16, fork)
+            CASE_F(17, execute)
+            CASE_2(18, get_cwd)
+            CASE_1(19, set_cwd)
+            CASE_1(20, join)
 
         default:
             ERROR("Invalid syscalls %llu from process %lu", number, task::get_current_process()->id);
@@ -359,6 +379,7 @@ namespace cosmos::syscalls {
             break;
         }
 
+#undef CASE_F
 #undef CASE_6
 #undef CASE_5
 #undef CASE_4

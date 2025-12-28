@@ -54,8 +54,7 @@ namespace cosmos::devices::pit {
     static void event_close(const uint64_t index) {
         asm volatile("cli" ::: "memory");
 
-        const auto file = stl::Rc(reinterpret_cast<vfs::File*>(repeats.remove_at(index).data));
-        file.deref();
+        repeats.remove_at(index);
 
         asm volatile("sti" ::: "memory");
     }
@@ -74,7 +73,7 @@ namespace cosmos::devices::pit {
             if (index == -1) return 0;
 
             uint32_t fd;
-            const auto event_file = task::create_event(event_close, index, fd).ref();
+            const auto event_file = *task::create_event(event_close, index, vfs::FileFlags::CloseOnExecute, fd);
 
             if (event_file == nullptr) {
                 return fd;

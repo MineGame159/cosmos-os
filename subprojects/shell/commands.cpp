@@ -3,18 +3,11 @@
 #include "color.hpp"
 #include "syscalls.hpp"
 
-#include <cstring>
-
 struct Command {
     stl::StringView name;
     stl::StringView description;
     CommandFn fn;
 };
-
-#define CSTR(name)                                                                                                                         \
-    const auto name##_cstr = static_cast<char*>(__builtin_alloca(name.size() + 1));                                                        \
-    memcpy(name##_cstr, name.data(), name.size());                                                                                         \
-    name##_cstr[name.size()] = '\0';
 
 static void print(const stl::StringView str) {
     sys::write(1, str.data(), str.size());
@@ -46,7 +39,7 @@ static void ls(const stl::StringView args) {
     // Open directory
     uint32_t fd;
 
-    if (!sys::open(args_cstr, sys::Mode::Read, fd)) {
+    if (!sys::open(args_cstr, sys::Mode::Read, sys::FileFlags::CloseOnExecute, fd)) {
         print(RED, "Failed to open directory\n");
         return;
     }
@@ -79,7 +72,7 @@ static void cat(const stl::StringView args) {
     // Open file
     uint32_t fd;
 
-    if (!sys::open(args_cstr, sys::Mode::Read, fd)) {
+    if (!sys::open(args_cstr, sys::Mode::Read, sys::FileFlags::CloseOnExecute, fd)) {
         print(RED, "Failed to open file\n");
         return;
     }
@@ -108,7 +101,7 @@ static void touch(const stl::StringView args) {
     // Open file
     uint32_t fd;
 
-    if (!sys::open(path_cstr, sys::Mode::Write, fd)) {
+    if (!sys::open(path_cstr, sys::Mode::Write, sys::FileFlags::CloseOnExecute, fd)) {
         print(RED, "Failed to open file\n");
         return;
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 
 enum class Sys : int64_t {
     Exit = 0,
@@ -20,9 +21,10 @@ enum class Sys : int64_t {
     Poll = 14,
     Pipe = 15,
     Fork = 16,
-    GetCwd = 17,
-    SetCwd = 18,
-    Join = 19,
+    Execute = 17,
+    GetCwd = 18,
+    SetCwd = 19,
+    Join = 20,
 };
 
 template <const Sys S>
@@ -115,6 +117,11 @@ namespace sys {
         ReadWrite,
     };
 
+    enum class FileFlags : uint8_t {
+        None = 0 << 0,
+        CloseOnExecute = 1 << 0,
+    };
+
     enum class SeekType : uint8_t {
         Start,
         Current,
@@ -143,8 +150,8 @@ namespace sys {
         return syscall<Sys::Stat>(reinterpret_cast<uint64_t>(path), reinterpret_cast<uint64_t>(&stat)) >= 0;
     }
 
-    inline bool open(const char* path, const Mode mode, uint32_t& fd) {
-        const auto result = syscall<Sys::Open>(reinterpret_cast<uint64_t>(path), static_cast<uint64_t>(mode));
+    inline bool open(const char* path, const Mode mode, const FileFlags flags, uint32_t& fd) {
+        const auto result = syscall<Sys::Open>(reinterpret_cast<uint64_t>(path), static_cast<uint64_t>(mode), static_cast<uint64_t>(flags));
         fd = static_cast<uint32_t>(result);
         return result >= 0;
     }
@@ -209,8 +216,8 @@ namespace sys {
         return syscall<Sys::Mount>(target_path_, filesystem_name_, device_path_) >= 0;
     }
 
-    inline bool eventfd(uint32_t& fd) {
-        const auto result = syscall<Sys::Eventfd>();
+    inline bool eventfd(const FileFlags flags, uint32_t& fd) {
+        const auto result = syscall<Sys::Eventfd>(static_cast<uint64_t>(flags));
         fd = static_cast<uint32_t>(result);
         return result >= 0;
     }
@@ -219,9 +226,9 @@ namespace sys {
         return syscall<Sys::Poll>(reinterpret_cast<uint64_t>(fds), count, reset_signalled ? 1 : 0, reinterpret_cast<uint64_t>(&mask)) >= 0;
     }
 
-    inline bool pipe(uint32_t& read_fd, uint32_t& write_fd) {
+    inline bool pipe(const FileFlags flags, uint32_t& read_fd, uint32_t& write_fd) {
         uint32_t fds[2];
-        if (syscall<Sys::Pipe>(reinterpret_cast<uint64_t>(fds)) < 0) return false;
+        if (syscall<Sys::Pipe>(static_cast<uint64_t>(flags), reinterpret_cast<uint64_t>(fds)) < 0) return false;
 
         read_fd = fds[0];
         write_fd = fds[1];
@@ -233,6 +240,10 @@ namespace sys {
         const auto result = syscall<Sys::Fork>();
         pid = static_cast<uint64_t>(result);
         return result >= 0;
+    }
+
+    inline void execute(const char* path) {
+        syscall<Sys::Execute>(reinterpret_cast<uint64_t>(path));
     }
 
     inline uint64_t get_cwd(char* buffer, const uint64_t length) {
@@ -248,3 +259,8 @@ namespace sys {
         return syscall<Sys::Join>(pid);
     }
 } // namespace sys
+
+#define CSTR(name)                                                                                                                         \
+    const auto name##_cstr = static_cast<char*>(__builtin_alloca(name.size() + 1));                                                        \
+    memcpy(name##_cstr, name.data(), name.size());                                                                                         \
+    name##_cstr[name.size()] = '\0';

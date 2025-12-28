@@ -333,11 +333,11 @@ namespace cosmos::memory::virt {
         return space;
     }
 
-    void destroy(const Space space) {
+    void clear(const Space space) {
         const auto pml4_table = get_ptr_from_phys<uint64_t>(space);
 
         for (auto pml4_i = 0; pml4_i < 256; pml4_i++) {
-            const auto pml4_entry = pml4_table[pml4_i];
+            auto& pml4_entry = pml4_table[pml4_i];
             if (!entry_is_present(pml4_entry)) continue;
             const auto pdp_table = get_ptr_from_phys<uint64_t>(pml4_entry & ADDRESS_MASK);
 
@@ -377,8 +377,12 @@ namespace cosmos::memory::virt {
             }
 
             phys::free_pages((pml4_entry & ADDRESS_MASK) / 4096ul, 1);
+            pml4_entry = 0;
         }
+    }
 
+    void destroy(const Space space) {
+        clear(space);
         phys::free_pages(space / 4096ul, 1);
     }
 

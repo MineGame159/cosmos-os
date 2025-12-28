@@ -179,7 +179,7 @@ namespace cosmos::vfs {
         return true;
     }
 
-    static stl::Rc<File> open_file(Node* node, const Mode mode) {
+    static stl::Rc<File> open_file(Node* node, const Mode mode, const FileFlags flags) {
         const auto ops = node->fs_ops->open(node, mode);
         if (ops == nullptr) return nullptr;
 
@@ -191,6 +191,7 @@ namespace cosmos::vfs {
         file->on_close = nullptr;
         file->node = node;
         file->mode = mode;
+        file->flags = flags;
         file->cursor = 0;
 
         return file;
@@ -237,7 +238,7 @@ namespace cosmos::vfs {
         .ioctl = dir_ioctl,
     };
 
-    static stl::Rc<File> open_dir(Node* node, const Mode mode) {
+    static stl::Rc<File> open_dir(Node* node, const Mode mode, const FileFlags flags) {
         if (is_write(mode)) return nullptr;
 
         if (!node->populated) node->fs_ops->populate(node);
@@ -249,6 +250,7 @@ namespace cosmos::vfs {
         file->on_close = nullptr;
         file->node = node;
         file->mode = mode;
+        file->flags = flags;
         file->cursor = 0;
 
         const auto it = reinterpret_cast<stl::LinkedList<Node>::Iterator*>(*file + 1);
@@ -257,7 +259,7 @@ namespace cosmos::vfs {
         return file;
     }
 
-    stl::Rc<File> open(stl::StringView path, const Mode mode) {
+    stl::Rc<File> open(stl::StringView path, const Mode mode, const FileFlags flags) {
         const auto length = check_abs_path(path);
         if (length == 0) return nullptr;
         path = path.substr(0, length);
@@ -274,8 +276,8 @@ namespace cosmos::vfs {
             if (node->open_write > 0) return nullptr;
             if (is_write(mode) && node->open_read > 0) return nullptr;
 
-            if (node->type == NodeType::Directory) return open_dir(node, mode);
-            if (node->type == NodeType::File) return open_file(node, mode);
+            if (node->type == NodeType::Directory) return open_dir(node, mode, flags);
+            if (node->type == NodeType::File) return open_file(node, mode, flags);
 
             return nullptr;
         }

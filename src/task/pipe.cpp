@@ -82,7 +82,7 @@ namespace cosmos::task {
 
     // Header
 
-    bool create_pipe(stl::Rc<vfs::File>& read_file, stl::Rc<vfs::File>& write_file) {
+    bool create_pipe(const vfs::FileFlags flags, stl::Rc<vfs::File>& read_file, stl::Rc<vfs::File>& write_file) {
         // Allocate pipe
         const auto pipe = memory::heap::alloc<Pipe>();
         if (pipe == nullptr) return false;
@@ -114,6 +114,7 @@ namespace cosmos::task {
         read_file->on_close = pipe_close;
         read_file->node = nullptr;
         read_file->mode = vfs::Mode::Read;
+        read_file->flags = flags;
         read_file->cursor = 0;
 
         *reinterpret_cast<Pipe**>(*read_file + 1) = pipe;
@@ -123,6 +124,7 @@ namespace cosmos::task {
         write_file->on_close = pipe_close;
         write_file->node = nullptr;
         write_file->mode = vfs::Mode::Write;
+        write_file->flags = flags;
         write_file->cursor = 0;
 
         *reinterpret_cast<Pipe**>(*write_file + 1) = pipe;

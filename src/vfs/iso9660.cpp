@@ -321,7 +321,7 @@ namespace cosmos::vfs::iso9660 {
 
     bool init(Node* node, const stl::StringView device_path) {
         // Open device
-        const auto device = open(device_path, Mode::Read);
+        const auto device = open(device_path, Mode::Read, vfs::FileFlags::CloseOnExecute);
         if (!device.valid()) return false;
 
         // Find PVD

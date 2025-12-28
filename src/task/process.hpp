@@ -75,6 +75,9 @@ namespace cosmos::task {
 
         stl::Optional<ProcessId> fork(const StackFrame& frame) const;
 
+        /// Returns the virtual address of the entry point if it successfully loaded the executable
+        stl::Optional<uint64_t> execute(stl::StringView path);
+
         void destroy();
     };
 
