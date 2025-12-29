@@ -47,7 +47,7 @@ namespace cosmos::task {
     }
 
     static uint64_t setup_user_stack(const uint64_t phys, const stl::Span<const char*> args, const stl::Span<const char*> env) {
-#define GET_USER_STACK_PTR(ptr) memory::virt::LOWER_HALF_END - ((phys + USER_STACK_SIZE) - (ptr - memory::virt::DIRECT_MAP))
+#define GET_USER_STACK_PTR(ptr) (memory::virt::LOWER_HALF_END - ((phys + USER_STACK_SIZE) - (ptr - memory::virt::DIRECT_MAP)))
 
         auto stack = reinterpret_cast<uint64_t*>(memory::virt::DIRECT_MAP + phys + USER_STACK_SIZE);
 
