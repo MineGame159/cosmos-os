@@ -19,21 +19,97 @@ namespace cosmos::task {
         asm volatile("swapgs; iretq");
     }
 
-    static stl::Optional<uint64_t> alloc_user_stack(const memory::virt::Space space) {
-        // Allocate physical pages
-        const auto phys = memory::phys::alloc_pages(USER_STACK_SIZE / 4096ul) / 4096ul;
-        if (phys == 0) return {};
+    static stl::Optional<uint64_t> alloc_user_stack() {
+        const auto phys = memory::phys::alloc_pages(USER_STACK_SIZE / 4096ul);
 
-        // Map virtual pages
-        constexpr auto flags = memory::virt::Flags::Write | memory::virt::Flags::User;
-        const auto status = memory::virt::map_pages(space, USER_STACK_BOTTOM_PAGE, phys, USER_STACK_SIZE / 4096ul, flags);
-
-        if (!status) {
-            memory::phys::free_pages(phys, USER_STACK_SIZE / 4096ul);
+        if (phys == 0) {
+            ERROR("Failed to allocate memory for user stack");
             return {};
         }
 
         return phys;
+    }
+
+    static void free_user_stack(const uint64_t phys) {
+        memory::phys::free_pages(phys / 4096ul, USER_STACK_SIZE / 4096ul);
+    }
+
+    static bool map_user_stack(const memory::virt::Space space, const uint64_t phys) {
+        constexpr auto flags = memory::virt::Flags::Write | memory::virt::Flags::User;
+        const auto status = memory::virt::map_pages(space, USER_STACK_BOTTOM_PAGE, phys / 4096ul, USER_STACK_SIZE / 4096ul, flags);
+
+        if (!status) {
+            ERROR("Failed to map memory for user stack");
+            memory::phys::free_pages(phys / 4096ul, USER_STACK_SIZE / 4096ul);
+        }
+
+        return status;
+    }
+
+    static uint64_t setup_user_stack(const uint64_t phys, const stl::Span<const char*> args, const stl::Span<const char*> env) {
+#define GET_USER_STACK_PTR(ptr) memory::virt::LOWER_HALF_END - ((phys + USER_STACK_SIZE) - (ptr - memory::virt::DIRECT_MAP))
+
+        auto stack = reinterpret_cast<uint64_t*>(memory::virt::DIRECT_MAP + phys + USER_STACK_SIZE);
+
+        // Copy arguments to stack
+        const auto args_ptrs = memory::heap::alloc_array<uint64_t>(args.size);
+
+        for (auto i = 0u; i < args.size; i++) {
+            const auto str_size = static_cast<size_t>(utils::strlen(args[i]) + 1);
+            const auto u64_size = stl::ceil_div(str_size, sizeof(uint64_t));
+            const auto ptr = stack - u64_size;
+
+            utils::memcpy(ptr, args[i], str_size);
+
+            stack -= u64_size;
+            args_ptrs[i] = GET_USER_STACK_PTR(reinterpret_cast<uint64_t>(ptr));
+        }
+
+        // Copy environment variables to stack
+        const auto env_ptrs = memory::heap::alloc_array<uint64_t>(env.size);
+
+        for (auto i = 0u; i < env.size; i++) {
+            const auto str_size = static_cast<size_t>(utils::strlen(env[i]) + 1);
+            const auto u64_size = stl::ceil_div(str_size, sizeof(uint64_t));
+            const auto ptr = stack - u64_size;
+
+            utils::memcpy(ptr, env[i], str_size);
+
+            stack -= u64_size;
+            env_ptrs[i] = GET_USER_STACK_PTR(reinterpret_cast<uint64_t>(ptr));
+        }
+
+        // Align top of stack to 16 bytes
+        if ((GET_USER_STACK_PTR(reinterpret_cast<uint64_t>(stack)) & 0xF) != 0) *--stack = 0;
+
+        const auto items_to_push = env.size + 1 + args.size + 1 + 1;
+        if (items_to_push % 2 == 1) *--stack = 0;
+
+        // Push environment variable pointers
+        *--stack = 0;
+
+        for (auto i = 0u; i < env.size; i++) {
+            *--stack = env_ptrs[env.size - 1 - i];
+        }
+
+        // Push argument pointers
+        *--stack = 0;
+
+        for (auto i = 0u; i < args.size; i++) {
+            *--stack = args_ptrs[args.size - 1 - i];
+        }
+
+        // Push argument count
+        *--stack = args.size;
+
+        // Free arrays
+        memory::heap::free(env_ptrs);
+        memory::heap::free(args_ptrs);
+
+        // Return RSP (top of stack)
+        return GET_USER_STACK_PTR(reinterpret_cast<uint64_t>(stack));
+
+#undef GET_USER_STACK_PTR
     }
 
     void setup_dummy_frame(StackFrame& frame, const ProcessFn fn) {
@@ -116,11 +192,18 @@ namespace cosmos::task {
         // Allocate user stack
         if (land == Land::User) {
             if (alloc_user_stack) {
-                const auto phys = task::alloc_user_stack(process->space);
+                const auto phys = task::alloc_user_stack();
 
                 if (phys.is_empty()) {
-                    ERROR("Failed to allocate memory for user stack");
+                    memory::heap::free(process->kernel_stack);
+                    processes.remove(process);
+                    memory::heap::free(process);
 
+                    return {};
+                }
+
+                if (!map_user_stack(process->space, phys.value())) {
+                    free_user_stack(phys.value());
                     memory::heap::free(process->kernel_stack);
                     processes.remove(process);
                     memory::heap::free(process);
@@ -182,7 +265,8 @@ namespace cosmos::task {
         return pid;
     }
 
-    stl::Optional<ProcessId> create_process(const stl::StringView path, const stl::StringView cwd) {
+    stl::Optional<ProcessId> create_process(const stl::StringView path, const stl::Span<const char*> args, const stl::Span<const char*> env,
+                                            const stl::StringView cwd) {
         // Open file
         const auto file = vfs::open(path, vfs::Mode::Read, vfs::FileFlags::CloseOnExecute);
 
@@ -198,16 +282,31 @@ namespace cosmos::task {
             return {};
         }
 
-        // Create process
-        const auto pid = create_process(reinterpret_cast<ProcessFn>(binary->virt_entry), Land::User, cwd);
+        // Create address space
+        const auto space = memory::virt::create();
 
+        if (space == 0) {
+            memory::heap::free(binary);
+            return {};
+        }
+
+        // Setup stack frame
+        StackFrame frame;
+        setup_dummy_frame(frame, reinterpret_cast<ProcessFn>(binary->virt_entry));
+
+        // Create process
+        const auto pid = create_process(space, Land::User, true, frame, cwd);
         if (pid.is_empty()) {
+            memory::virt::destroy(space);
             memory::heap::free(binary);
             return {};
         }
 
         DEBUG("Creating process %lu for file %s", pid.value(), path.data());
         const auto process = get_process(pid.value());
+
+        // Setup user stack
+        frame.user_rsp = setup_user_stack(process->user_stack_phys, args, env);
 
         // Load ELF binary
         if (!elf::load(process->space, file, binary)) {
@@ -307,7 +406,8 @@ namespace cosmos::task {
         return process->id;
     }
 
-    stl::Optional<uint64_t> Process::execute(const stl::StringView path) {
+    stl::Optional<EntryPoint> Process::execute(const stl::StringView path, const stl::Span<const char*> args,
+                                               const stl::Span<const char*> env) {
         if (land != Land::User) {
             ERROR("Can only execute binaries in user-land processes");
             return {};
@@ -328,12 +428,8 @@ namespace cosmos::task {
             return {};
         }
 
-        // Clear address space
-        memory::virt::clear(space);
-        memory::virt::switch_to(space);
-
         // Allocate user stack
-        const auto stack_phys = alloc_user_stack(space);
+        const auto stack_phys = alloc_user_stack();
 
         if (stack_phys.is_empty()) {
             ERROR("Failed to allocate memory for user stack");
@@ -343,8 +439,23 @@ namespace cosmos::task {
 
         user_stack_phys = stack_phys.value();
 
+        // Setup user stack
+        const auto rsp = setup_user_stack(user_stack_phys, args, env);
+
+        // Clear address space
+        memory::virt::clear(space);
+        memory::virt::switch_to(space);
+
+        // Map user stack
+        if (!map_user_stack(space, user_stack_phys)) {
+            free_user_stack(user_stack_phys);
+            memory::heap::free(binary);
+            return {};
+        }
+
         // Load ELF binary
         if (!elf::load(space, binary_file, binary)) {
+            free_user_stack(user_stack_phys);
             memory::heap::free(binary);
             return {};
         }
@@ -364,7 +475,7 @@ namespace cosmos::task {
             }
         }
 
-        return rip;
+        return EntryPoint{ rip, rsp };
     }
 
     void Process::destroy() {

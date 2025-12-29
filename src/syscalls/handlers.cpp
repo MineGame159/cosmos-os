@@ -26,6 +26,20 @@ namespace cosmos::syscalls {
         return stl::StringView(ptr, length);
     }
 
+    static stl::Span<const char*> get_string_span(const uint64_t arg) {
+        const auto ptr = reinterpret_cast<const char* const*>(arg);
+        size_t count = 0;
+
+        for (;;) {
+            if (memory::virt::is_invalid_user(arg + count * sizeof(const char*))) return stl::Span<const char*>(nullptr, 0);
+            if (ptr[count] == nullptr) break;
+            if (get_string_view(reinterpret_cast<uint64_t>(ptr[count])).empty()) return stl::Span<const char*>(nullptr, 0);
+            count++;
+        }
+
+        return stl::Span(ptr, count);
+    }
+
     static void free_string(const stl::StringView str) {
         memory::heap::free(const_cast<char*>(str.data()));
     }
@@ -266,15 +280,17 @@ namespace cosmos::syscalls {
 
     int64_t execute(task::StackFrame& frame) {
         const auto path = get_string_view(frame.rdi);
+        const auto args = get_string_span(frame.rsi);
+        const auto env = get_string_span(frame.rdx);
         const auto process = task::get_current_process();
 
         const auto abs_path = vfs::resolve(process->cwd, path);
 
-        const auto entry_point = process->execute(abs_path);
+        const auto entry_point = process->execute(abs_path, args, env);
         if (entry_point.is_empty()) return -1;
 
-        frame.rip = entry_point.value();
-        frame.user_rsp = memory::virt::LOWER_HALF_END;
+        frame.rip = entry_point.value().rip;
+        frame.user_rsp = entry_point.value().rsp;
 
         return 0;
     }

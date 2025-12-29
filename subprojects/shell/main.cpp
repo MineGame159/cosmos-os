@@ -158,7 +158,15 @@ static void run_command(const CommandFn fn, const stl::StringView args) {
 
 static void run_file(const stl::StringView name) {
     CSTR(name)
-    sys::execute(name_cstr);
+
+    const char* args[2];
+    args[0] = name_cstr;
+    args[1] = nullptr;
+
+    const char* env[1];
+    env[0] = nullptr;
+
+    sys::execute(name_cstr, args, env);
 
     // Print error message
     constexpr char fg_esc_seq[] = { 27, 'f', static_cast<char>(150), static_cast<char>(0), static_cast<char>(0) };

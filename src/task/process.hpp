@@ -4,6 +4,7 @@
 #include "stl/fixed_list.hpp"
 #include "stl/optional.hpp"
 #include "stl/rc.hpp"
+#include "stl/span.hpp"
 #include "vfs/types.hpp"
 
 namespace cosmos::task {
@@ -36,6 +37,10 @@ namespace cosmos::task {
         uint64_t& operator[](const uint32_t index) {
             return (&r15)[14 - (index < 15 ? index : 14)];
         }
+    };
+
+    struct EntryPoint {
+        uint64_t rip, rsp;
     };
 
     struct Process {
@@ -75,8 +80,7 @@ namespace cosmos::task {
 
         stl::Optional<ProcessId> fork(const StackFrame& frame) const;
 
-        /// Returns the virtual address of the entry point if it successfully loaded the executable
-        stl::Optional<uint64_t> execute(stl::StringView path);
+        stl::Optional<EntryPoint> execute(stl::StringView path, stl::Span<const char*> args, stl::Span<const char*> env);
 
         void destroy();
     };
@@ -88,8 +92,11 @@ namespace cosmos::task {
 
     stl::Optional<ProcessId> create_process(memory::virt::Space space, Land land, bool alloc_user_stack, const StackFrame& frame,
                                             stl::StringView cwd);
+
     stl::Optional<ProcessId> create_process(ProcessFn fn, Land land, stl::StringView cwd);
-    stl::Optional<ProcessId> create_process(stl::StringView path, stl::StringView cwd);
+
+    stl::Optional<ProcessId> create_process(stl::StringView path, stl::Span<const char*> args, stl::Span<const char*> env,
+                                            stl::StringView cwd);
 
     stl::Rc<Process> get_process(ProcessId id);
 } // namespace cosmos::task

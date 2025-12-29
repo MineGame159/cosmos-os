@@ -242,8 +242,8 @@ namespace sys {
         return result >= 0;
     }
 
-    inline void execute(const char* path) {
-        syscall<Sys::Execute>(reinterpret_cast<uint64_t>(path));
+    inline void execute(const char* path, const char* const args[], const char* const env[]) {
+        syscall<Sys::Execute>(reinterpret_cast<uint64_t>(path), reinterpret_cast<uint64_t>(args), reinterpret_cast<uint64_t>(env));
     }
 
     inline uint64_t get_cwd(char* buffer, const uint64_t length) {

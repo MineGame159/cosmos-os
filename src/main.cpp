@@ -56,7 +56,10 @@ void init() {
 
     log::disable_display();
 
-    const auto process = task::create_process("/iso/shell", "/");
+    const char* args[1];
+    args[0] = "/iso/shell";
+
+    const auto process = task::create_process(args[0], { args, 1 }, { nullptr, 0 }, "/");
     task::enqueue(process.value());
 
     task::exit(0);
