@@ -3,6 +3,8 @@
 #include "process.hpp"
 
 namespace cosmos::task {
+    void spawn_reaper(memory::virt::Space space);
+
     bool enqueue(ProcessId pid);
     bool dequeue(ProcessId pid);
 
@@ -14,8 +16,7 @@ namespace cosmos::task {
     void yield();
     void exit(uint64_t status);
 
-    void suspend();
-    void resume(ProcessId pid);
+    void suspend(UnsuspendFn unsuspend_fn, uint64_t unsuspend_data);
 
     void run();
 } // namespace cosmos::task

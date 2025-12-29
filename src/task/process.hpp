@@ -18,7 +18,6 @@ namespace cosmos::task {
         Waiting,
         Running,
         Suspended,
-        SuspendedEvents,
         Exited,
     };
 
@@ -43,6 +42,8 @@ namespace cosmos::task {
         uint64_t rip, rsp;
     };
 
+    using UnsuspendFn = bool (*)(uint64_t);
+
     struct Process {
         ProcessId id;
         size_t ref_count;
@@ -59,11 +60,11 @@ namespace cosmos::task {
 
         uint64_t user_stack_phys;
 
-        Process* joining_with;
+        UnsuspendFn unsuspend_fn;
+        uint64_t unsuspend_data;
 
         const stl::Rc<vfs::File>* event_files;
         uint32_t event_count;
-        bool event_signalled;
 
         stl::StringView cwd;
 
@@ -81,6 +82,8 @@ namespace cosmos::task {
         stl::Optional<ProcessId> fork(const StackFrame& frame) const;
 
         stl::Optional<EntryPoint> execute(stl::StringView path, stl::Span<const char*> args, stl::Span<const char*> env);
+
+        void exit(uint64_t status);
 
         void destroy();
     };

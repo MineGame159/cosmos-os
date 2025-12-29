@@ -122,21 +122,36 @@ namespace cosmos::task {
         frame.user_rsp = memory::virt::LOWER_HALF_END;
     }
 
+    void suspend(UnsuspendFn unsuspend_fn, uint64_t unsuspend_data);
     void yield();
+
+    static bool reaper_process_unsuspend(const uint64_t has_zombie) {
+        return has_zombie != 0;
+    }
 
     void reaper_process() {
         for (;;) {
+            auto exited_has_refs = false;
+
             for (auto it = processes.begin(); it != processes.end(); ++it) {
                 const auto process = *it;
+                if (process->state != State::Exited) continue;
 
                 if (process->ref_count == 1) {
                     DEBUG("Destroying process %lu", process->id);
                     processes.remove(it);
                     process->destroy();
+                } else {
+                    exited_has_refs = true;
                 }
             }
 
-            yield();
+            if (exited_has_refs) {
+                yield();
+                continue;
+            }
+
+            suspend(reaper_process_unsuspend, 0);
         }
     }
 
@@ -167,11 +182,11 @@ namespace cosmos::task {
 
         process->space = space;
 
-        process->joining_with = nullptr;
+        process->unsuspend_fn = nullptr;
+        process->unsuspend_data = 0;
 
         process->event_files = nullptr;
         process->event_count = 0;
-        process->event_signalled = false;
 
         process->fd_table = {};
 
@@ -478,11 +493,17 @@ namespace cosmos::task {
         return EntryPoint{ rip, rsp };
     }
 
-    void Process::destroy() {
+    // ReSharper disable once CppParameterNamesMismatch
+    void Process::exit(const uint64_t status_) {
+        state = State::Exited;
+        status = status_;
+
         for (const auto file : fd_table) {
             stl::Rc(file).deref();
         }
+    }
 
+    void Process::destroy() {
         memory::heap::free(const_cast<char*>(cwd.data()));
         memory::virt::destroy(space);
         memory::heap::free(kernel_stack);

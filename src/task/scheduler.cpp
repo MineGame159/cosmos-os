@@ -13,6 +13,8 @@ namespace cosmos::task {
         uint64_t current_process;
     };
 
+    static ProcessId reaper_pid;
+
     static stl::LinkedList<ProcessId> process_queue = {};
     static stl::LinkedList<ProcessId>::Iterator it = {};
 
@@ -89,6 +91,19 @@ namespace cosmos::task {
         switch_to(old_rsp, process->kernel_stack_rsp);
     }
 
+    static bool join_unsuspend(const uint64_t pid) {
+        const auto process = get_process(pid);
+        return process->state == State::Exited;
+    }
+
+    void spawn_reaper(const memory::virt::Space space) {
+        StackFrame frame;
+        setup_dummy_frame(frame, reaper_process);
+
+        reaper_pid = create_process(space, Land::Kernel, false, frame, "/").value();
+        enqueue(reaper_pid);
+    }
+
     bool enqueue(const ProcessId pid) {
         const auto process = get_process(pid);
         if (!process.valid()) return false;
@@ -120,11 +135,7 @@ namespace cosmos::task {
         const auto current = get_current_process();
         if (process == current) return {};
 
-        current->state = State::SuspendedEvents;
-        current->joining_with = *process;
-
-        yield();
-        current->joining_with = nullptr;
+        suspend(join_unsuspend, pid);
 
         const auto status = process->status;
 
@@ -173,12 +184,8 @@ namespace cosmos::task {
                     break;
                 }
 
-                if (current->state == State::SuspendedEvents) {
-                    if (current->joining_with != nullptr) {
-                        if (current->joining_with->state == State::Exited) break;
-                    } else {
-                        if (current->event_signalled) break;
-                    }
+                if (current->state == State::Suspended && current->unsuspend_fn(current->unsuspend_data)) {
+                    break;
                 }
 
                 if (current == old_process) {
@@ -193,6 +200,11 @@ namespace cosmos::task {
                 return;
             }
 
+            if (current->state == State::Suspended) {
+                current->unsuspend_fn = nullptr;
+                current->unsuspend_data = 0;
+            }
+
             new_process_ptr = *current;
             old_process_ptr = *old_process;
         }
@@ -204,28 +216,23 @@ namespace cosmos::task {
     void exit(const uint64_t status) {
         {
             const auto current = get_current_process();
+            current->exit(status);
 
-            current->state = State::Exited;
-            current->status = status;
+            const auto reaper = get_process(reaper_pid);
+            reaper->unsuspend_data = 1;
         }
 
         yield();
     }
 
-    void suspend() {
+    void suspend(const UnsuspendFn unsuspend_fn, const uint64_t unsuspend_data) {
         const auto current = get_current_process();
 
         current->state = State::Suspended;
+        current->unsuspend_fn = unsuspend_fn;
+        current->unsuspend_data = unsuspend_data;
 
         yield();
-    }
-
-    void resume(const ProcessId pid) {
-        const auto process = get_process(pid);
-
-        if (process.valid() && process->state == State::Suspended) {
-            process->state = State::Waiting;
-        }
     }
 
     void run() {

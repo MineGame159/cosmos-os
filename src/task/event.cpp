@@ -30,7 +30,7 @@ namespace cosmos::task {
         const auto event = reinterpret_cast<Event*>(*file + 1);
 
         event->number += *static_cast<const uint64_t*>(buffer);
-        if (event->waiting_process != nullptr) event->waiting_process->event_signalled = true;
+        if (event->waiting_process != nullptr) event->waiting_process->unsuspend_data = 1;
 
         asm volatile("sti" ::: "memory");
         return sizeof(uint64_t);
@@ -107,6 +107,10 @@ namespace cosmos::task {
         return mask;
     }
 
+    static bool wait_on_events_unsuspend(const uint64_t signalled) {
+        return signalled != 0;
+    }
+
     uint64_t wait_on_events(const stl::Rc<vfs::File>* event_files, uint32_t count, bool reset_signalled) {
         if (count > 64) return 0;
         asm volatile("cli" ::: "memory");
@@ -134,10 +138,8 @@ namespace cosmos::task {
 
         process->event_files = event_files;
         process->event_count = count;
-        process->event_signalled = false;
 
-        process->state = State::SuspendedEvents;
-        yield();
+        suspend(wait_on_events_unsuspend, 0);
         asm volatile("cli" ::: "memory");
 
         const auto mask = get_signalled_mask(event_files, count, reset_signalled);
