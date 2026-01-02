@@ -23,7 +23,7 @@ jobs:
         version: 1.0
 
     - name: Setup Meson
-      run: meson setup build
+      run: meson setup --cross-file cross.ini build
 
     - name: Build ISO
       run: make iso
