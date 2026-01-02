@@ -1,9 +1,6 @@
 project(
     'cosmos-os',
-    ['cpp', 'c'],
-    default_options : [
-        'cpp_std=c++23'
-    ]
+    ['cpp', 'c']
 )
 
 sources = [
@@ -56,19 +53,8 @@ includes = [
 ]
 
 c_args = [
-    '-ffreestanding',
-    '-m64', '-march=x86-64',
     '-mno-red-zone', '-fno-omit-frame-pointer',
-    '-O0', '-g',
-    '-mno-mmx', '-mno-3dnow', '-mno-sse', '-mno-avx', '-mno-avx2', '-mno-avx512f',
-    '-fno-stack-protector', '-fno-stack-check',
-    '-fno-asynchronous-unwind-tables',
-    '-pedantic', '-Wall', '-Wextra', '-Wundef', '-Werror', '-Wno-unused-variable', '-Wno-unused-parameter', '-Wno-unused-function', '-Wno-unused-but-set-variable', '-Wno-missing-field-initializers', '-Wno-gnu-zero-variadic-macro-arguments'
-]
-
-cpp_args = [
-    '-std=c++23',
-    '-fno-exceptions', '-fno-rtti',
+    '-O0', '-g'
 ]
 
 stl_proj = subproject('stl')
@@ -89,10 +75,9 @@ executable(
     include_directories : includes,
     dependencies : [stl_dep],
     c_args : c_args,
-    cpp_args : c_args + cpp_args,
+    cpp_args : c_args,
     pie : false,
     link_args : [
-        '-ffreestanding', '-nostdlib',
         '-pie',
         '-T' + meson.project_source_root() + '/linker.ld'
     ]

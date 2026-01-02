@@ -16,6 +16,12 @@
         <option name="profiles">
           <MesonProfile>
             <option name="buildDir" value="build" />
+            <option name="setupOptions">
+              <list>
+                <option value="--cross-file" />
+                <option value="cross.ini" />
+              </list>
+            </option>
           </MesonProfile>
         </option>
       </MesonProjectSettings>
